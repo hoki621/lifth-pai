@@ -18,7 +18,6 @@ def generate_launch_description():
         raise ValueError("generate outputs/issue1/cup_world.sdf before launching")
     bringup = Path(get_package_share_directory("lifth_bringup")) / "launch/arm_gazebo.launch.py"
     server_config = Path(get_package_share_directory("lifth_exec_pick")) / "config/move_to_pose.yaml"
-    recorder = Path(get_package_share_directory("lifth_dataset")) / "launch/record.launch.py"
     model = load_model("v2_1_1")
     description = robot_description("gazebo", "v2_1_1", True)
     robot, controllers, ompl = moveit_configuration(model, description)
@@ -38,6 +37,7 @@ def generate_launch_description():
         Node(package="lifth_moveit_config", executable="lifth_move_group", parameters=[planning], output="screen"),
         Node(package="lifth_exec_pick", executable="move_to_pose_server",
              parameters=[str(server_config), execution], output="screen", sigterm_timeout="10.0"),
-        IncludeLaunchDescription(PythonLaunchDescriptionSource(str(recorder)), launch_arguments={
-            "model": "v2_1_1", "backend": "gazebo", "output_dir": str(repo / "data/raw")}.items()),
+        Node(executable="python3", arguments=[str(repo / "collection/reliable_rgb_recorder.py")],
+             parameters=[{"model": "v2_1_1", "backend": "gazebo", "use_sim_time": True,
+                          "output_dir": str(repo / "data/raw")}], output="screen"),
     ])
