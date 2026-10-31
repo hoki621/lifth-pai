@@ -5,8 +5,9 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from lifth_bringup.model import load_model, moveit_configuration, robot_description
 
@@ -14,8 +15,18 @@ from lifth_bringup.model import load_model, moveit_configuration, robot_descript
 def generate_launch_description():
     repo = Path(__file__).resolve().parent.parent
     world = repo / "outputs/issue1/cup_world.sdf"
+    return LaunchDescription([
+        DeclareLaunchArgument("world", default_value=str(world)),
+        DeclareLaunchArgument("output_dir", default_value=str(repo / "data/raw")),
+        OpaqueFunction(function=launch_nodes),
+    ])
+
+
+def launch_nodes(context):
+    repo = Path(__file__).resolve().parent.parent
+    world = Path(LaunchConfiguration("world").perform(context)).resolve()
     if not world.is_file():
-        raise ValueError("generate outputs/issue1/cup_world.sdf before launching")
+        raise ValueError(f"generate world before launching: {world}")
     bringup = Path(get_package_share_directory("lifth_bringup")) / "launch/arm_gazebo.launch.py"
     server_config = Path(get_package_share_directory("lifth_exec_pick")) / "config/move_to_pose.yaml"
     model = load_model("v2_1_1")
@@ -28,7 +39,7 @@ def generate_launch_description():
                 "publish_state_updates": True, "publish_transforms_updates": True}
     execution = {**robot, "use_sim_time": True, "planning_group": model["moveit"]["group"],
                  "tcp_link": model["tcp_frame"], "reference_frame": model["base_frame"]}
-    return LaunchDescription([
+    return [
         SetEnvironmentVariable("IGN_GAZEBO_RESOURCE_PATH", os.pathsep.join(filter(None, [
             str(repo / "external/assets/materials/textures"), os.environ.get("IGN_GAZEBO_RESOURCE_PATH", "")]))),
         # robot_descriptionの配信元を既存RSPに限定し、cameraなし記述との競合を避ける。
@@ -39,5 +50,5 @@ def generate_launch_description():
              parameters=[str(server_config), execution], output="screen", sigterm_timeout="10.0"),
         Node(executable="python3", arguments=[str(repo / "collection/reliable_rgb_recorder.py")],
              parameters=[{"model": "v2_1_1", "backend": "gazebo", "use_sim_time": True,
-                          "output_dir": str(repo / "data/raw")}], output="screen"),
-    ])
+                          "output_dir": LaunchConfiguration("output_dir")}], output="screen"),
+    ]
