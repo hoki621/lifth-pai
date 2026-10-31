@@ -8,7 +8,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
-from lifth_bringup.model import load_model, robot_description, moveit_configuration
+from lifth_bringup.model import load_model, moveit_configuration, robot_description
 
 
 def generate_launch_description():

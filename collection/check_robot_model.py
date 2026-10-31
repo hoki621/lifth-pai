@@ -8,7 +8,6 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-
 PACKAGE = "LIFTH_arm_v2_1_1_description"
 SHA256 = "09174927e76a2808d5877404206e2e2b5c48739696223365a6dd1d17937f6120"
 

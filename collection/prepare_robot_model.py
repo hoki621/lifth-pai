@@ -11,7 +11,6 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import yaml
-
 from check_robot_model import PACKAGE, SHA256, check_model
 
 BASE_SHA = "de410efb3a90348e256015305e80e10ecdcfd972"

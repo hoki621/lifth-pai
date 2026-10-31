@@ -6,14 +6,13 @@ import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from prepare_robot_model import tip_point, prepare
+from prepare_robot_model import prepare, tip_point
 
 
 class TipPointTests(unittest.TestCase):
     def test_refuses_to_modify_original_checkout(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(ValueError, "inside PAI external"):
-                prepare(Path(directory), Path(directory))
+        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, "inside PAI external"):
+            prepare(Path(directory), Path(directory))
 
     def test_distal_face_with_scale_and_origin(self):
         with tempfile.TemporaryDirectory() as directory:
