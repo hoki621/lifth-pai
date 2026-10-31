@@ -1,0 +1,24 @@
+name: 開発タスク
+description: 1つの目的と確認方法を定義する
+title: ""
+body:
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的・変更後の動作
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 対象・対象外・依存
+      description: 対象マシン、基盤commit、関連Issue、未確定事項を記載
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件・確認方法
+      description: 入力、期待値、正常・異常系、実行環境を記載
+    validations:
+      required: true
