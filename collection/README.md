@@ -1,6 +1,8 @@
 # collection (tg1)
 
-教師デモと raw 収録への PAI 固有接続を将来置く場所です。実装・追加 Python 依存はまだありません。
+教師デモと raw 収録への PAI 固有接続を置く場所です。
+Issue #1の素材検査・確認world生成は[手順と未完了事項](../docs/issue-1-status.md)を参照してください。
+教師シーケンスは未実装で、追加 Python 依存はありません。
 共通基盤の camera / recorder を利用し、重複実装しません。
 
 環境は Ubuntu 22.04 / ROS 2 Humble / Gazebo Fortress。
