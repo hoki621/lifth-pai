@@ -4,6 +4,7 @@ Ubuntu 22.04 / ROS 2 Humble / Gazebo Fortress を Docker に隔離する。
 ホストに ROS や LeRobot を導入する必要はない。既定は CPU 描画で、GPU 設定は不要。
 [tg1 の固定設定検証](issue-1-validation.md)は 9/10 成功。hikariでもDocker build・起動・物理タスク成功を確認した。従来のBEST_EFFORT RGB購読で発生した通信欠落への対処として、通常launchもRGBだけをRELIABLE購読に変更した。固定基盤のソースは変更せず再利用する。詳細は同検証記録を参照。
 hikariでの変更後の固定10試行は、物理タスク8/10成功、raw 10/10 complete・validator合格、RGB欠落推定0。失敗2件は下降経路の部分解による安全停止だった。
+並列生成の短時間比較では、収録品質を優先する目安は2並列（raw 4/4合格）。3並列は5/6、4並列は6/8合格で画像の鮮度超過が発生した。有効デモ取得速度は4並列が最大だったが、失敗rawの除外が必要。詳細・測定限界は同検証記録を参照。
 
 ## clone と素材配置
 

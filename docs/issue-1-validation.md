@@ -65,6 +65,27 @@ Gazeboネイティブ購読とROS購読の撮影stampを同時観測した。Gaz
 
 rawは `data/raw/episode_<ID>/`。Git外の実行記録は `outputs/issue1/hikari-reliable-10-20261031-235203/`。`results.json` に全件の判定・実行コードハッシュ・RGB検証統計、`trial-XX/` にlaunch/sequence/start/stop/validatorログと実カップtrace、`successful_episodes.txt` に今回の成功8件の入力一覧を保存した。固定基盤の追跡ファイルは未変更、コンテナは停止済み。10試行での結果であり長時間・並列収集の安定性は未検証。
 
+### hikari 並列生成の短時間比較（2026-11-01）
+
+PAI commit `507f3c5550a5adaf15a6920f6e1247306ac4589f`、固定基盤・教師設定・RGB RELIABLE・CPU描画の条件を維持した。1環境あたり2試行ずつ、1→2→4→3並列の順で計20試行。各試行でGazeboを再起動し、既存validatorと実カップtraceによる物理判定を使用した。独立DockerコンテナごとにROS_DOMAIN_ID、IGN_PARTITION、ROSログ先を分離し、`/pai`の固定buildとworldは共有して読み込んだ。rawはUUID別保存。共通基盤・collectionコード・設定・閾値・ホストsysctlは変更せず、全workerの実行コードハッシュ一致を確認した。
+
+| 並列数 | 試行数 | 物理タスク成功 | raw complete・validator合格 | 両方を満たす件数 | 総時間 | 有効デモ/時（短時間換算） |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2 | 2 | 2 | 2 | 196.0秒 | 36.7 |
+| 2 | 4 | 3 | 4 | 3 | 197.4秒 | 54.7 |
+| 3 | 6 | 4 | 5 | 3 | 197.7秒 | 54.6 |
+| 4 | 8 | 6 | 6 | 5 | 229.6秒 | 78.4 |
+
+総時間には全workerのlaunch・収録・明示stop・validator・launch終了を含め、Dockerコンテナ作成と最終stopは含めない。有限バッチの遅いworkerを待つ時間も含む。物理失敗5件はいずれも既知の下降Cartesian部分解（fraction約0.161〜0.163）で把持前に安全停止し、再試行なし。試行数が少ないためIK成功率のばらつきも速度換算に影響する。
+
+収録失敗は3並列で1/6件（RGB source age309 ms）、4並列で2/8件（306 ms、360 ms）。いずれも既存の300 ms鮮度上限によるincompleteで、欠落を許す設定変更はしていない。complete rawでのRGB欠落推定は全件0、最大source gap66 ms。2並列の最大source ageは241 ms、4並列の合格rawでも最大298 msと上限に近い。2・4並列の代表成功例で移送中・退避後の実画像も確認した。
+
+コンテナ合計のCPU使用量ピーク（Dockerの100%=論理CPU1個換算）は1/2/3/4並列で約9.1/16.4/20.3/25.2個分、メモリピークは約1.59/3.22/4.82/6.19 GiB。ホストはi9-10980XE、18コア36スレッド、RAM約125.5 GiB。並列負荷下の画像遅延が確認され、メモリ容量は十分だった。8並列は実施せず、詳細な最適化も行っていない。
+
+**現条件の推奨は、収録品質を優先するなら2並列。失敗rawを除外して取得速度を優先するなら、今回の実測最大は4並列（約78有効デモ/時）だが収録2/8件が失敗した。** 3並列は今回、2並列から有効デモ速度が増えず収録失敗も出た。短時間・少数試行の目安で、厳密な最適値や100件連続収録の安定性を保証しない。
+
+Git外の記録: `outputs/issue1/hikari-parallel-20261101-001110/results.json`、`parallel-N/summary.json`、各worker/trialのログ・trace・raw検証、`resources.jsonl`。`successful_episodes.txt`には今回の物理成功かつvalidator合格13件だけを記録した。rawは `data/raw/episode_<ID>/`。試験用コンテナはすべて停止済み。今回の収録コード・依存・ホスト設定へのパッチはない。
+
 以下はtg1での検証記録。
 
 確認日: 2026-10-31。対象: tg1、1配置のGazebo教師デモ。
