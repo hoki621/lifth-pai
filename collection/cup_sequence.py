@@ -32,7 +32,24 @@ def run_steps(steps, execute, stopped):
         execute(step)
 
 
+def validate_scene_world(config, path):
+    world = ET.parse(path).find("world")
+    pose = world.findtext("model[@name='pai_cup']/pose") if world is not None else None
+    expected = config["cup_pose"]
+    observed = list(map(float, pose.split())) if pose is not None else []
+    if (len(expected) != 6 or len(observed) != 6 or not all(math.isfinite(v) for v in observed + expected)
+            or any(abs(a - b) > 1e-9 for a, b in zip(observed, expected))):
+        raise ValueError("teacher scene and selected world cup pose differ")
+
+
 def main():
+    from control_lock import acquire_control
+
+    with acquire_control():
+        run_teacher()
+
+
+def run_teacher():
     import rclpy
     from action_msgs.msg import GoalStatus
     from control_msgs.action import FollowJointTrajectory
@@ -57,8 +74,11 @@ def main():
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path)
+    parser.add_argument("--world", type=Path,
+                        default=Path(__file__).resolve().parent.parent / "outputs/issue1/cup_world.sdf")
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
+    validate_scene_world(config, args.world)
     steps = config["steps"]
     validate_steps(steps)
     model = load_model("v2_1_1")
@@ -118,8 +138,7 @@ def main():
 
     def scene(attached=False, placed=False):
         # Gazeboへの拘束は作らない。ここでのattachはMoveItの計画用のみ。
-        world_path = Path(__file__).resolve().parent.parent / "outputs/issue1/cup_world.sdf"
-        world = ET.parse(world_path).find("world")
+        world = ET.parse(args.world).find("world")
         client = node.create_client(ApplyPlanningScene, "/apply_planning_scene")
         try:
             if not client.wait_for_service(timeout_sec=5):

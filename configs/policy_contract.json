@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "model": "v2_1_1",
+  "foundation_revision": "de410efb3a90348e256015305e80e10ecdcfd972",
+  "lerobot_revision": "7e241bd630a3719a56157a497ce5d08f244784f1",
+  "joint_names": ["base_j2", "j2_j3", "j3_j4", "j4_j5", "j5_j6", "j6_ee", "ee_f1", "ee_f2"],
+  "joint_units": ["rad", "rad", "rad", "rad", "rad", "rad", "m", "m"],
+  "action_semantics": "absolute_position",
+  "image_key": "observation.images.d405",
+  "image_shape_hwc": [360, 640, 3],
+  "state_key": "observation.state",
+  "action_key": "action",
+  "task": "Pick up the cup and place it on the target support.",
+  "timing": {
+    "validated": false,
+    "fps": 15,
+    "label_offset_ns": 0,
+    "max_observation_age_ns": 100000000,
+    "max_observation_skew_ns": 70000000,
+    "max_command_age_ns": 100000000,
+    "max_command_skew_ns": 50000000
+  }
+}
