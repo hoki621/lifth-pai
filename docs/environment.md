@@ -1,7 +1,8 @@
 # 環境準備
 
-2026-10-31 時点。このリポジトリは開発準備だけを行った状態です。
-以下の端末用コマンドは将来の手順であり、今回 tg1 / hikari では実行していません。
+2026-10-31 時点。tg1でI1のモデル・教師収録接続を検証しています。
+実行手順と確認済み範囲は[Issue #1の記録](issue-1-status.md)を参照してください。
+以下は再配置時の手順も含み、hikariではまだ実行していません。
 版を確定していない LeRobot の install コマンドはまだ用意しません。
 
 ## 配置と分離
@@ -10,13 +11,13 @@
 | --- | --- | --- |
 | Mac | 文書・Git・設定準備 | ROS / CUDA / LeRobot は不要 |
 | tg1 | Fortress / camera / raw 収録 | 既存 Humble の Ubuntu Python（22.04 標準は3.10）。ROS の apt 依存を利用 |
-| hikari | 外部変換 / 学習 / 推論 | OS・GPU・driver を確認後、LeRobot 専用 venv。確認した main は Python >=3.12 |
+| hikari | Docker内で収録、別環境で外部変換 / 学習 / 推論 | OS・GPU・driver を確認後、LeRobot 専用 venv。確認した main は Python >=3.12 |
 
 両機で `git clone https://github.com/hoki621/lifth-pai.git` を使う想定です。
 private repo の認証は各機の認証機構で設定し、token を URL やファイルに埋め込みません。
 収録データは Git の外で管理します。転送先・手段はまだ決めません。
 
-## 共通基盤の取得（将来実施）
+## 共通基盤の取得
 
 `dependencies.repos` は vcstool 形式です。vcstool が導入済みなら PAI repo 直下で:
 
@@ -26,12 +27,14 @@ vcs import external < dependencies.repos
 git -C external/lifth_arm_gen2 rev-parse HEAD
 ```
 
-期待 commit は `619bfd2508c869b30ac5954719a82dc5ff6632f7` です。
+期待 commit は `de410efb3a90348e256015305e80e10ecdcfd972` です。
 上記は依存取得だけを行い、ROS のビルドや起動は行いません。
 `external/` は Git 対象外。LeRobot は版選定前なので manifest に含めません。
 
-## tg1（将来実施）
+## tg1
 
+tg1はUbuntu 24.04ホスト上の既存PRoot / Ubuntu 22.04.5 / Humble / Fortress環境を使用します。
+元のlifth_arm_gen2を変更せず、PAIのexternal checkoutへモデル固有設定を追加します。
 既存の ROS / Fortress 環境を再インストールしません。
 まず Ubuntu 版、`python3 --version`、ROS distro と既存 workspace の overlay を確認します。
 共通基盤の固定 commit の README・package README にある build / rosdep 手順を確認して使います。
@@ -49,7 +52,12 @@ python --version
 基盤の dev 依存・build 出力は基盤ディレクトリ内で管理します。
 録画手順や topic は固定 commit の `src/lifth_dataset/README.md` を正本とし、PAI で推測の起動コマンドを作りません。
 
-## hikari（将来実施）
+## hikari の収録
+
+Docker利用可能との確認を受領済み。clone・素材配置・ビルド・収録は[hikari手順](hikari-collection.md)にまとめる。
+ROSのコンテナと、以下の学習用venvを分離する。
+
+## hikari の学習（将来実施）
 
 ROS を source していない新しいシェルを使い、OS・GPU 型番・VRAM・driver・Python を記録します。
 GPU は今は起動せず、確認のための SSH も行いません。
@@ -69,11 +77,12 @@ Hub 認証や gated model のライセンス同意は必要になった段階で
 
 ## raw → dataset 境界
 
-固定基盤の recorder は schema_version 1 の JSON/JSONL + PNG と URDF を保存します。
-state は arm6(rad) + passive finger2(m)、command は arm6(rad) です。depth は収録しません。
+固定基盤の recorder は schema_version 2 の JSON/JSONL + PNG と URDF を保存します。
+stateはarm6(rad) + finger2(m)、実commandはarm6(rad)と左右各1軸(m)の独立時系列です。depthは収録しません。
 基盤の検証器に合格した `complete` episode のみを変換対象とし、欠損・時計の逆行・未完了を隠しません。
 command は controller の position command interface の値であり、モーター送信確認ではありません。
-#14 のモデル切替・左右独立指令・指先 TF が整うまでは8軸 action に拡張しません。
+左右指令のsource stampを維持し、8軸の同時刻commandを保存側で合成しません。
+収録にはdata/raw/を使用し、completeとタスク成功は別々に扱います。
 
 同期・サンプリング・action 定義を決めた後、ROS 外の learning 環境で v3 公式 writer を使う計画です。
 公式資料の `create` / `add_frame` / `save_episode` / `finalize` を採用版で確認し、変換後の再読込みも検証します。
