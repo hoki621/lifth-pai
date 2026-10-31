@@ -24,10 +24,11 @@ class SequenceTests(unittest.TestCase):
             run_steps(steps, self.fail, lambda: True)
 
     def test_bad_later_target_rejected_before_first_step(self):
-        steps = [{"name": "open", "gripper": [0, 0]},
-                 {"name": "bad", "pose": [0, 0, 0, 0, 0, 0, 0]}]
-        with self.assertRaises(ValueError):
-            run_steps(steps, self.fail, lambda: False)
+        for kind in ("pose", "cartesian"):
+            steps = [{"name": "open", "gripper": [0, 0]},
+                     {"name": "bad", kind: [0, 0, 0, 0, 0, 0, 0]}]
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                run_steps(steps, self.fail, lambda: False)
 
 
 if __name__ == "__main__":
