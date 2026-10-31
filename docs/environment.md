@@ -1,9 +1,11 @@
 # 環境準備
 
-2026-10-31 時点。tg1でI1のモデル・教師収録接続を検証しています。
-実行手順と確認済み範囲は[Issue #1の記録](issue-1-status.md)を参照してください。
-以下は再配置時の手順も含み、hikariではまだ実行していません。
-版を確定していない LeRobot の install コマンドはまだ用意しません。
+2026-11-01 時点。tg1とhikariの教師収録は[Issue #1の検証記録](issue-1-validation.md)を参照してください。
+以下は再配置時の手順も含みます。ML側の候補依存は[pyproject.toml](../learning/pyproject.toml)に指定し、
+[解決の記録](../learning/dependency-provenance.json)と[専用環境のlock](../learning/uv.lock)を保存しています。
+Issue #4の依頼に基づき専用環境を導入し、公式writer往復、GPUでの10 step学習・保存、
+別プロセス再読込みとvalidation forwardを確認しました。
+今回は学習完了までで区切り、実policyのGazebo適用は後回しです。最新の実験結果は[検証記録](issue-4-validation.md)を参照してください。
 
 ## 配置と分離
 
@@ -11,7 +13,7 @@
 | --- | --- | --- |
 | Mac | 文書・Git・設定準備 | ROS / CUDA / LeRobot は不要 |
 | tg1 | Fortress / camera / raw 収録 | 既存 Humble の Ubuntu Python（22.04 標準は3.10）。ROS の apt 依存を利用 |
-| hikari | Docker内で収録、別環境で外部変換 / 学習 / 推論 | OS・GPU・driver を確認後、LeRobot 専用 venv。確認した main は Python >=3.12 |
+| hikari | Docker内で収録、別環境で外部変換 / 学習 / 推論 | ROSはsystem Python 3.10、MLは専用Python 3.12.16。RTX A6000 48 GiB×3、driver 580.178.04 |
 
 両機で `git clone https://github.com/hoki621/lifth-pai.git` を使う想定です。
 private repo の認証は各機の認証機構で設定し、token を URL やファイルに埋め込みません。
@@ -29,7 +31,7 @@ git -C external/lifth_arm_gen2 rev-parse HEAD
 
 期待 commit は `de410efb3a90348e256015305e80e10ecdcfd972` です。
 上記は依存取得だけを行い、ROS のビルドや起動は行いません。
-`external/` は Git 対象外。LeRobot は版選定前なので manifest に含めません。
+`external/` は Git 対象外。LeRobotの候補版はML側の `learning/pyproject.toml` で別に指定します。
 
 ## tg1
 
@@ -48,7 +50,8 @@ source collection/.venv/bin/activate
 python --version
 ```
 
-この venv に LeRobot / CUDA / 学習依存を入れません。collection の追加依存は現時点でありません。
+この venv に LeRobot / CUDA / 学習依存を入れません。教師収録は既存基盤の依存を使います。
+推論接続ではrosbridge_suiteの候補版が別途必要です。指定版・未検証事項は[実装計画](issue-234-plan.md)を参照してください。
 基盤の dev 依存・build 出力は基盤ディレクトリ内で管理します。
 録画手順や topic は固定 commit の `src/lifth_dataset/README.md` を正本とし、PAI で推測の起動コマンドを作りません。
 
@@ -57,23 +60,26 @@ python --version
 Docker利用可能との確認を受領済み。clone・素材配置・ビルド・収録は[hikari手順](hikari-collection.md)にまとめる。
 ROSのコンテナと、以下の学習用venvを分離する。
 
-## hikari の学習（将来実施）
+## hikari の学習
 
 ROS を source していない新しいシェルを使い、OS・GPU 型番・VRAM・driver・Python を記録します。
-GPU は今は起動せず、確認のための SSH も行いません。
-採用 LeRobot commit と対応 Python / PyTorch / CUDA を選び、最小動作試験後に依存を固定します。
-例えば Python 3.12 を採用し、既にインストール済みの場合の空の環境作成は:
+今回はユーザーの実験依頼と環境導入許可に基づいて実行しました。SSHは使用していません。
+候補はPython 3.12.16と固定LeRobot commit、PyTorch/CUDAをML側に指定しています。
+初回の既存Python 3.12.3による解決失敗後、SHA-256を照合した指定PythonをGit外へ導入しました。
+`learning/.venv`で`lerobot[pi,training]`と固定torch/torchvision、roslibpyを解決・導入しています。
+ROS環境にはこれらを導入していません。
+指定のPython 3.12.16が別途用意済みの場合、空の環境を作る例は:
 
 ```bash
 # PAI repo 直下、hikari の別シェルで実行
-python3.12 -m venv learning/.venv
+/absolute/path/to/python3.12.16 -m venv learning/.venv
 source learning/.venv/bin/activate
 python --version
 ```
 
-pi05 の公式 optional dependency は `pi`、SmolVLA は `smolvla`。
-具体的な install は採用版の公式資料に従って別作業で実施します。今回は重い依存を取得しません。
-Hub 認証や gated model のライセンス同意は必要になった段階で本人が行います。
+今回のpi05学習では公式extraの `pi,training` を使っています。SmolVLAは計画上の代替候補です。
+依存の再導入は専用lockと[learning手順](../learning/README.md)に従います。
+gated tokenizerの利用条件への同意とHub認証はユーザー本人が行い、固定revisionへのアクセスを確認しました。
 
 ## raw → dataset 境界
 
@@ -84,6 +90,8 @@ command は controller の position command interface の値であり、モー�
 左右指令のsource stampを維持し、8軸の同時刻commandを保存側で合成しません。
 収録にはdata/raw/を使用し、completeとタスク成功は別々に扱います。
 
-同期・サンプリング・action 定義を決めた後、ROS 外の learning 環境で v3 公式 writer を使う計画です。
-公式資料の `create` / `add_frame` / `save_episode` / `finalize` を採用版で確認し、変換後の再読込みも検証します。
-raw schema の互換性や pi05・SmolVLA・Remote Inference との統合は未検証です。
+[共通契約](../configs/README.md)に沿う因果的15 Hz対応と8軸actionのconverterをROS外に実装しています。
+固定版の公式 `create` / `add_frame` / `save_episode` / `finalize` と再読込み照合を使います。
+利用方法は[learning手順](../learning/README.md)を参照してください。
+公式writer往復、pi05の短い学習・保存・別プロセス再読込みを確認済みです。
+ROS推論接続は検証記録で工程別に扱い、学習済みpolicyのGazebo試行は未実行です。
