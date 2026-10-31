@@ -1,5 +1,93 @@
 # Issue #1 検証結果
 
+## hikari Docker 初回実行（2026-10-31）
+
+- PAI: `6cdda3e566bc209e2cd2f174311a5923eb22bad6`（PR #8 merge）、基盤は上記手順の固定版 `de410efb3a90348e256015305e80e10ecdcfd972`。教師設定は変更なし。
+- 提供モデルZIP・カップZIPのSHAは記録と一致。モデル展開27ファイル・mesh10個の検査に合格。必要素材は揃っている。
+- Docker 29.7.1、CPU描画。イメージbuild、rosdep依存導入、全9packageビルド、モデル設定追加、world生成、起動に成功。ホストにROS・学習環境は導入していない。
+- 固定設定1試行のシーケンスは終了0。Gazebo実カップposeで把持・移送・設置を確認し、退避まで完了。移送中8.727 sim秒の最低zは0.381369 m、最大傾き0.022334度。最終XY誤差0.073380 mm、Z誤差0.000065 mm、傾き0.000079度で上記の成功条件に合格。
+- raw: `data/raw/episode_8f2ef2ded8e14c4ebe2aa8e29a77af93/`。**保存はincomplete、既存validatorは終了1。** 下降中にRGBの入力stamp間隔330 msが既存上限300 msを超え、自動停止した。明示stopは「no active episode」を返した。
+- 保存RGBは640×360の304枚（画像を確認）、stateは2159件。全工程のRGBは保存されておらず、学習用completeデモの生成可否は未確認。描画・bridge・DDSのどの層で欠落したかは未特定。教師設定や欠落閾値は変更していない。
+- 詳細: Git外の `outputs/issue1/hikari-result.json`、`hikari-cup-trace.jsonl`、`hikari-sequence.log`、`hikari-launch.log`、`hikari-setup.log`、`hikari-stop.log`、`hikari-validator.log`。導入版は `runtime-packages.txt`、Docker buildログは `/tmp/lifth-pai-hikari-docker-build.log`。
+
+### hikari RGB欠落の原因調査（同日）
+
+Gazeboネイティブ購読とROS購読の撮影stampを同時観測した。GazeboのRGB/CameraInfoは最大67 ms間隔で継続し、ROS診断購読ではGazeboに存在した画像6枚が欠落した。さらに既存recorderでもGazeboのstamp `129955000000`、`130021000000` の2枚がrawに届かず、間隔が198 msになった。`/proc/net/udp` のsocket inodeをPIDへ対応させ、recorderプロセスの受信socketで3件、診断ROS購読で23件のUDP破棄を確認。`/proc/net/snmp`でも`RcvbufErrors`を確認した。
+
+この診断で確認した欠落箇所はROS/DDSのUDP受信経路。PNG書込みやGazebo描画の欠落ではない。bridgeのRGB publisherはRELIABLEだがrecorder購読はBEST_EFFORTであり、受信落ちを再送で回復しない。ホストの`net.core.rmem_max`・`rmem_default`は各212992 bytes、RGB payloadは691200 bytes。受信バッファ上限の小ささは候補だが、個々のDDS socketの実バッファ容量や溢れを起こすスケジューリング条件までは未測定。前回の330 ms欠落時の送信側・socket記録はなく、前回と同一原因であることは未確定。
+
+診断rawは `data/raw/episode_aeab6f447e954c40aec9582a69c50462/`。約142 sim秒、RGB2156枚、complete・既存validator終了0（RGB最大source gap 198 ms）。これは収録経路の診断で、全工程の成功例ではない。教師動作は下降Cartesian経路fraction約0.161の既知条件で停止した。教師設定・欠落閾値・基盤コード・ホストsysctlは変更していない。
+
+証拠はGit外の `outputs/issue1/hikari-diagnostic-*`（Gazebo/ROS stamp、集計JSON、UDP/SNMP、QoS、launch、start/stop、validator）。次の修正候補はRGB受信の信頼性・バッファ設定。上流のrecorder変更やホスト設定変更は今回行っていない。
+
+### hikari RELIABLE RGB比較検証（同日・再起動なし）
+
+固定基盤のrecorderを継承するGit外の診断wrapper `outputs/issue1/hikari-reliable-recorder.py` で、RGB購読だけをRELIABLE/depth100に変更した。元のrecorderプロセスは停止し、同じmodel/backend/output_dir/use_sim_timeでwrapperを起動。画像形式、教師設定、source gap/age閾値、他streamのQoS、ホストsysctl、固定基盤のソースは変更なし。manifestの`provenance.settings.qos.rgb`に診断overrideを記録した。ROS endpointでもRELIABLEを確認。
+
+- episode: `f6397d7d78914d7bae7dbc47ef4d77f8`。rawは `data/raw/episode_f6397d7d78914d7bae7dbc47ef4d77f8/`。
+- 同時観測した66.726 sim秒・Gazebo RGB1012枚のうち、並行BEST_EFFORT購読は2枚欠落（stamp `21055000000`、`21121000000`）。RELIABLE recorderは欠落0枚、最大source gap66 ms、最大source age71 ms。
+- **全工程のrawはcomplete、既存validator終了0。** RGB1012枚、state6681件。移送・退避後の実画像も確認した。
+- **物理タスクも成功。** シーケンス終了0、持上げ後8.729 sim秒の最低z 0.381490 m、最大傾き0.022360度。最終設置XY誤差0.072810 mm、Z誤差0.000127 mm、傾き0.000081度。
+- ログ・比較結果・実カップtraceは `outputs/issue1/reliable-check/`（`comparison.json`、`hikari-result.json`、`validator.log`、`qos.txt`等）。コンテナは停止した。
+
+再起動せずRGB購読QoSの変更で欠落のない全工程収録ができた。この診断時点では既定の起動手順はBEST_EFFORTのまま。後述のPAI接続で通常launchにも適用した。基盤checkoutの追跡ファイル・upstreamは変更していない。
+
+### 通常launchへのRGB RELIABLE適用
+
+`collection/reliable_rgb_recorder.py` が固定基盤のRecorderを継承し、RGB購読だけをRELIABLE/depth100へ変更する。基盤の`main()`を再利用して保存・終了・エラー処理を維持し、`cup_demo.launch.py`から通常起動する。manifestの`provenance.settings.qos`にはRGB設定と他streamのBEST_EFFORT設定を区別して記録する。欠落・鮮度閾値、教師設定、基盤commitは変更していない。
+
+通常launchをhikariのDockerで起動し、RGB endpointのRELIABLE設定を確認した。episode `6f44bad5833e495a8a20676d55a53ee6` は全工程成功・raw complete・既存validator終了0。RGB1064枚、欠落推定0、最大source gap66 ms、最大source age119 ms。実カップの保持は8.760 sim秒、最低z0.381433 m、最大傾き0.022523度。最終設置XY誤差0.073288 mm。rawは `data/raw/episode_6f44bad5833e495a8a20676d55a53ee6/`、ログ・実カップtrace・判定はGit外の `outputs/issue1/reliable-patch/`。
+
+既存unittest8件、変更したPythonのruff、collectionのcompileall、`git diff --check`に合格。manifestのRGB QoSと300 ms閾値も照合した。基盤の追跡ファイルは未変更。コンテナは停止した。続いて下記の固定10試行を実施した。
+
+### hikari 通常launch・固定設定10試行（2026-10-31〜11-01 JST）
+
+**把持・移送・設置・退避まで8/10成功。rawは10/10 complete・既存validator合格。RGB合計8999枚、全試行で欠落推定0。**
+
+通常launchのRGB RELIABLEパッチを使用し、各試行でGazeboを終了・再起動した。基盤commit・教師設定はtg1と同じ。タスク設定SHA-256は `2bc66df9c6746e49d3bf849392949c303a8ad7084bf26c56c2cc21cf1fa05ba7`。試行間で設定・実行コードを変更していないことを全collection Pythonのハッシュで照合した。今回のパッチは未commitのため、PAI HEAD `6cdda3e566bc209e2cd2f174311a5923eb22bad6` に対する差分とファイルハッシュを実行記録に保存している。過去の診断episodeは分母に含めない。
+
+| 試行 | episode ID | 把持・全工程 | raw検証 | RGB枚数 |
+| --- | --- | --- | --- | --- |
+| 1 | `d254603424d94be3a64ab74277725c49` | 成功 | 合格 | 935 |
+| 2 | `4734ce99b9544ed4992c6f993c96d63b` | 成功 | 合格 | 934 |
+| 3 | `31d7ce6aaaff4b41b0aae92346ed0477` | 成功 | 合格 | 1420 |
+| 4 | `b7c65dad71764151b012831d99dc37c5` | 成功 | 合格 | 936 |
+| 5 | `48b022a9b6454594a5a16e7b5bb10d36` | 失敗 | 合格 | 273 |
+| 6 | `63c4b5f4169140c28cbb598240b377e6` | 成功 | 合格 | 1415 |
+| 7 | `6058a327ca9342899e6ab1ee6ae145c3` | 失敗 | 合格 | 275 |
+| 8 | `ac01e72c05014f53a49a77de6d3a86d4` | 成功 | 合格 | 938 |
+| 9 | `3e299d2061084d87b539f9fb028ba427` | 成功 | 合格 | 937 |
+| 10 | `5771ce706eb940cf92ff646eca052ed5` | 成功 | 合格 | 936 |
+
+失敗5・7はともに下降Cartesian経路がfraction `0.16304347826086957` の部分解になり、実行せず把持前に停止した。tg1にもあった計画上の失敗条件と一致し、RGB通信による停止ではない。失敗も分母に含め、再試行・パラメータ変更なしで10件を完走した。
+
+物理判定は前述のtg1と同じ保持時間・実カップ高さ・傾き・設置誤差の条件を使用。成功8件の最大設置XY誤差0.0750 mm、最大設置Z誤差0.000113 mm、最大最終傾き0.000087度。試行1・10の移送中と退避後のRGB実画像も確認した。RGBの最大source gapは66 ms、最大source ageは240 msで、既存の300 ms閾値は変更していない。
+
+rawは `data/raw/episode_<ID>/`。Git外の実行記録は `outputs/issue1/hikari-reliable-10-20261031-235203/`。`results.json` に全件の判定・実行コードハッシュ・RGB検証統計、`trial-XX/` にlaunch/sequence/start/stop/validatorログと実カップtrace、`successful_episodes.txt` に今回の成功8件の入力一覧を保存した。固定基盤の追跡ファイルは未変更、コンテナは停止済み。10試行での結果であり長時間・並列収集の安定性は未検証。
+
+### hikari 並列生成の短時間比較（2026-11-01）
+
+PAI commit `507f3c5550a5adaf15a6920f6e1247306ac4589f`、固定基盤・教師設定・RGB RELIABLE・CPU描画の条件を維持した。1環境あたり2試行ずつ、1→2→4→3並列の順で計20試行。各試行でGazeboを再起動し、既存validatorと実カップtraceによる物理判定を使用した。独立DockerコンテナごとにROS_DOMAIN_ID、IGN_PARTITION、ROSログ先を分離し、`/pai`の固定buildとworldは共有して読み込んだ。rawはUUID別保存。共通基盤・collectionコード・設定・閾値・ホストsysctlは変更せず、全workerの実行コードハッシュ一致を確認した。
+
+| 並列数 | 試行数 | 物理タスク成功 | raw complete・validator合格 | 両方を満たす件数 | 総時間 | 有効デモ/時（短時間換算） |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 2 | 2 | 2 | 2 | 196.0秒 | 36.7 |
+| 2 | 4 | 3 | 4 | 3 | 197.4秒 | 54.7 |
+| 3 | 6 | 4 | 5 | 3 | 197.7秒 | 54.6 |
+| 4 | 8 | 6 | 6 | 5 | 229.6秒 | 78.4 |
+
+総時間には全workerのlaunch・収録・明示stop・validator・launch終了を含め、Dockerコンテナ作成と最終stopは含めない。有限バッチの遅いworkerを待つ時間も含む。物理失敗5件はいずれも既知の下降Cartesian部分解（fraction約0.161〜0.163）で把持前に安全停止し、再試行なし。試行数が少ないためIK成功率のばらつきも速度換算に影響する。
+
+収録失敗は3並列で1/6件（RGB source age309 ms）、4並列で2/8件（306 ms、360 ms）。いずれも既存の300 ms鮮度上限によるincompleteで、欠落を許す設定変更はしていない。complete rawでのRGB欠落推定は全件0、最大source gap66 ms。2並列の最大source ageは241 ms、4並列の合格rawでも最大298 msと上限に近い。2・4並列の代表成功例で移送中・退避後の実画像も確認した。
+
+コンテナ合計のCPU使用量ピーク（Dockerの100%=論理CPU1個換算）は1/2/3/4並列で約9.1/16.4/20.3/25.2個分、メモリピークは約1.59/3.22/4.82/6.19 GiB。ホストはi9-10980XE、18コア36スレッド、RAM約125.5 GiB。並列負荷下の画像遅延が確認され、メモリ容量は十分だった。8並列は実施せず、詳細な最適化も行っていない。
+
+**現条件の推奨は、収録品質を優先するなら2並列。失敗rawを除外して取得速度を優先するなら、今回の実測最大は4並列（約78有効デモ/時）だが収録2/8件が失敗した。** 3並列は今回、2並列から有効デモ速度が増えず収録失敗も出た。短時間・少数試行の目安で、厳密な最適値や100件連続収録の安定性を保証しない。
+
+Git外の記録: `outputs/issue1/hikari-parallel-20261101-001110/results.json`、`parallel-N/summary.json`、各worker/trialのログ・trace・raw検証、`resources.jsonl`。`successful_episodes.txt`には今回の物理成功かつvalidator合格13件だけを記録した。rawは `data/raw/episode_<ID>/`。試験用コンテナはすべて停止済み。今回の収録コード・依存・ホスト設定へのパッチはない。
+
+以下はtg1での検証記録。
+
 確認日: 2026-10-31。対象: tg1、1配置のGazebo教師デモ。
 
 **固定設定10試行で把持・設置・退避まで 9/10 成功。rawは10/10がcomplete・既存validator合格。**
