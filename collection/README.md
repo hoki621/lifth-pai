@@ -4,6 +4,8 @@
 Issue #1の素材検査・確認world生成は[手順と原因切分け](../docs/issue-1-status.md)を参照してください。
 教師シーケンスと既存収録の起動接続があります。ROS環境と既存のPyYAMLを使います。
 共通基盤の camera / recorder を利用し、重複実装しません。
+`cup_demo.launch.py` は `reliable_rgb_recorder.py` を介し、固定基盤recorderのRGB購読だけをRELIABLEにします。
+他streamは従来のBEST_EFFORTを維持し、実際のRGB QoSはrawの `provenance.settings.qos.rgb` に記録します。
 
 環境は Ubuntu 22.04 / ROS 2 Humble / Gazebo Fortress。
 [環境手順](../docs/environment.md)に従い、LeRobot をこの環境へ導入しません。
