@@ -1,4 +1,4 @@
-# I1: model/API/schema v2 integration checked; cup transfer success is not yet accepted.
+# I1: fixed model/API/schema v2 foundation; tg1 validation: docs/issue-1-validation.md.
 repositories:
   lifth_arm_gen2:
     type: git

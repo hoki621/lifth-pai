@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | Mac | 文書・Git・設定準備 | ROS / CUDA / LeRobot は不要 |
 | tg1 | Fortress / camera / raw 収録 | 既存 Humble の Ubuntu Python（22.04 標準は3.10）。ROS の apt 依存を利用 |
-| hikari | 外部変換 / 学習 / 推論 | OS・GPU・driver を確認後、LeRobot 専用 venv。確認した main は Python >=3.12 |
+| hikari | Docker内で収録、別環境で外部変換 / 学習 / 推論 | OS・GPU・driver を確認後、LeRobot 専用 venv。確認した main は Python >=3.12 |
 
 両機で `git clone https://github.com/hoki621/lifth-pai.git` を使う想定です。
 private repo の認証は各機の認証機構で設定し、token を URL やファイルに埋め込みません。
@@ -52,7 +52,12 @@ python --version
 基盤の dev 依存・build 出力は基盤ディレクトリ内で管理します。
 録画手順や topic は固定 commit の `src/lifth_dataset/README.md` を正本とし、PAI で推測の起動コマンドを作りません。
 
-## hikari（将来実施）
+## hikari の収録
+
+Docker利用可能との確認を受領済み。clone・素材配置・ビルド・収録は[hikari手順](hikari-collection.md)にまとめる。
+ROSのコンテナと、以下の学習用venvを分離する。
+
+## hikari の学習（将来実施）
 
 ROS を source していない新しいシェルを使い、OS・GPU 型番・VRAM・driver・Python を記録します。
 GPU は今は起動せず、確認のための SSH も行いません。

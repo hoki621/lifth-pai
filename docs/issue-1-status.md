@@ -1,7 +1,8 @@
 # Issue #1: 素材検査と確認world
 
 この変更は [I1 #1](https://github.com/hoki621/lifth-pai/issues/1) の収集接続。
-教師シーケンスと診断rawを実装・検証し、固定設定の成功率と途中取消を確認している。
+教師シーケンスと診断rawを実装・検証し、固定設定の成功率と途中取消を確認済み。固定設定10試行で9/10成功、rawは10/10検証合格。
+[検証結果](issue-1-validation.md)と[hikariへの移行手順](hikari-collection.md)を参照。
 基盤は既存 `lifth_arm_gen2` を参照し、変更・転載しない。
 
 ## 素材検査
@@ -27,7 +28,7 @@ OBJ外接箱は約130.740 × 96.522 × 114.624 mm。これは把持高さの胴�
 
 ```bash
 python3 collection/prepare_cup_world.py \
-  /nfs/hdd/lifth/lifth_arm_gen2/src/lifth_bringup/worlds/arm_camera.sdf \
+  external/lifth_arm_gen2/src/lifth_bringup/worlds/arm_camera.sdf \
   external/assets configs/cup_scene.json outputs/issue1/cup_world.sdf
 ```
 
@@ -35,18 +36,18 @@ python3 collection/prepare_cup_world.py \
 生成worldは既存bringupの `world:=` 差替え口用で、単独ではロボットを起動しない。
 URIは生成機上の絶対パスなのでhikariでは素材を置いて再生成する。
 設定のposeはworld基準のm・radで、最後のyawを変更して持ち手方向を調整する。
-初期値は確認用配置であり、腕からの到達・把持姿勢・置き先は未検証。
+この固定配置の到達・把持・設置はtg1で検証済み。配置変更時は再検証する。
 
 物性は実測ではなく仮定: 質量0.3 kg、摩擦係数0.8、OBJ外接箱の中心と一様箱慣性。
 visualは提供meshを維持し、scaleは変更しない。collisionは高さ別外形幅に基づく6段の円柱と持ち手の箱で近似する。
 低い胴体を横から把持できるよう、初期位置と置き先には半径28 mmの細い支持台を配置する。
 これらの衝突形状と物性はPAI固有の仮定であり、実物の内部形状や持ち手の穴は再現しない。
-Fortress/DART上の接触・摩擦・安定性、把持時のcollision適合は別途実行検証が必要。
+この固定配置のFortress/DART上の把持・設置を実行検証した。実物との物性一致は未検証。
 摩擦や質量の調整で開口不適合を隠さない。
 
 ## モデル登録と実行環境
 
-基盤候補SHAは `de410efb3a90348e256015305e80e10ecdcfd972`（PR #20）。
+基盤固定SHAは `de410efb3a90348e256015305e80e10ecdcfd972`（PR #20）。
 左右指制御・tip TF・raw schema v2が実装済み。v2.1.1の登録だけをPAIのexternal checkoutに追加する許可を受領した。
 元の `/nfs/hdd/lifth/lifth_arm_gen2` とupstreamは変更しない。
 
@@ -139,7 +140,7 @@ IK・時間付与・軌道実行は既存MoveIt/controllerの機能を使い、P
 退避の直進が完了した時点で元のACMへ戻し、上昇退避も通常の衝突検査で計画する。
 直進経路の校正試行では全工程が成功し、移送後の傾き約0.02度、設置後はほぼ直立を確認した。
 
-## 検証中の事項
+## 実行検証
 
 - 提供モデルのxacro・mesh・controller・MoveIt整合検査、起動、実測tip TF取得は成功。
 - RGB約15 Hz、state約100 Hzの同時受信を確認。接近姿勢のAction成功と実測到達も確認。
@@ -148,7 +149,8 @@ IK・時間付与・軌道実行は既存MoveIt/controllerの機能を使い、P
 - 一時停止せずに開始したrawは、開始処理中の滞留入力が300 msを超えてincompleteになった。
   Gazeboを一時停止してstartを呼び、応答後に再開した診断rawはcompleteとなりvalidatorに合格した。
 - 端から0.2 mm退避した設定で把持・約18 cmの持上げ・移送・設置を確認した。
-  カップ実位置は置き先から約2 mm以内で直立。固定設定10試行と途中取消は引き続き検証する。
+  最終固定設定は10試行中9件で全工程成功。失敗1件は接近時の肘解による下降部分経路の拒否。
+  実行中Cartesian Actionの取消と後続phase未送信も確認済み。詳細は[検証結果](issue-1-validation.md)。
 
 保存completeはタスク成功とは別であり、診断rawの合格だけでI1完了としない。
 
@@ -161,6 +163,6 @@ git diff --check
 
 人工素材だけをテストに用い、提供素材やrawはcommitしない。
 
-今回の実行結果: 上記unittestは4件成功。配置済み素材によるworld生成成功。
+今回の実行結果: 上記unittestは8件成功。ruff・compileall・diff checkも成功。配置済み素材によるworld生成成功。
 既存PRoot / Ubuntu 22.04環境の `ign sdf -k` は `Valid.`、終了コード0。
-これはSDF構文検査であり、Gazeboの物理起動・安定性・把持成功を確認した結果ではない。
+SDF構文検査に加え、上記の実起動・物理動作・raw保存も別に検証している。
