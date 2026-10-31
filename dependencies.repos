@@ -1,6 +1,6 @@
-# Confirmed 2026-10-31; reference only, not a claim of PAI integration testing.
+# I1: model/API/schema v2 integration checked; cup transfer success is not yet accepted.
 repositories:
   lifth_arm_gen2:
     type: git
     url: https://github.com/LifthPJT/lifth_arm_gen2.git
-    version: 619bfd2508c869b30ac5954719a82dc5ff6632f7
+    version: de410efb3a90348e256015305e80e10ecdcfd972

@@ -26,7 +26,8 @@ class CupWorldTests(unittest.TestCase):
             self.assertEqual(cup.findtext("link/inertial/mass"), "0.3")
             self.assertAlmostEqual(float(cup.findtext("link/inertial/inertia/ixx")), 0.0005)
             self.assertEqual(cup.findtext("link/collision/surface/friction/ode/mu"), "0.8")
-            self.assertTrue(cup.findtext("link/collision/geometry/mesh/uri").startswith("file:///"))
+            self.assertIsNotNone(cup.find("link/collision/geometry/cylinder"))
+            self.assertEqual(len(cup.findall("link/collision")), 7)
             self.assertIsNotNone(world.find("model[@name='pai_floor']"))
             for key, value in (("mass_kg", -1), ("friction", -1),
                                ("cup_pose", [0] * 5), ("cup_pose", [float("nan")] * 6)):
