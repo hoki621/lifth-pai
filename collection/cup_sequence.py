@@ -1,6 +1,7 @@
 """確認済みActionを1段ずつ実行する教師シーケンス。Ctrl-Cで取消し、後続を送らない。"""
 
 import argparse
+import copy
 import json
 import math
 import signal
@@ -35,17 +36,23 @@ def main():
     import rclpy
     from action_msgs.msg import GoalStatus
     from control_msgs.action import FollowJointTrajectory
+    from control_msgs.msg import JointTolerance
+    from geometry_msgs.msg import Pose
     from lifth_bringup.gripper import require_live_model, targets
     from lifth_bringup.model import joint_properties, load_model, robot_description
     from lifth_custom_msgs.action import MoveToPose
+    from moveit_msgs.msg import (
+        AllowedCollisionEntry,
+        AttachedCollisionObject,
+        CollisionObject,
+        PlanningSceneComponents,
+    )
+    from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
     from rclpy.action import ActionClient
     from rclpy.node import Node
     from rclpy.signals import SignalHandlerOptions
-    from trajectory_msgs.msg import JointTrajectoryPoint
-    from moveit_msgs.msg import CollisionObject, AttachedCollisionObject
-    from moveit_msgs.srv import ApplyPlanningScene
-    from geometry_msgs.msg import Pose
     from shape_msgs.msg import SolidPrimitive
+    from trajectory_msgs.msg import JointTrajectoryPoint
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path)
@@ -65,6 +72,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = Node("pai_cup_teacher", parameter_overrides=[rclpy.parameter.Parameter("use_sim_time", value=True)])
+    original_contact_matrix = [None]
 
     def wait(future, timeout):
         deadline = time.monotonic() + timeout
@@ -153,6 +161,29 @@ def main():
                 else:
                     request.scene.world.collision_objects.append(obj)
             if placed:
+                # 解放直後の指とcupの接触は正常。腕・支持台の衝突除外は変えない。
+                getter = node.create_client(GetPlanningScene, "/get_planning_scene")
+                try:
+                    if not getter.wait_for_service(timeout_sec=5):
+                        raise RuntimeError("planning scene collision matrix unavailable")
+                    query = GetPlanningScene.Request()
+                    query.components.components = PlanningSceneComponents.ALLOWED_COLLISION_MATRIX
+                    matrix = wait(getter.call_async(query), 5).scene.allowed_collision_matrix
+                finally:
+                    node.destroy_client(getter)
+                original_contact_matrix[0] = copy.deepcopy(matrix)
+                for name in ("pai_cup", "f1_1", "f2_1"):
+                    if name not in matrix.entry_names:
+                        matrix.entry_names.append(name)
+                        for row in matrix.entry_values:
+                            row.enabled.append(False)
+                        matrix.entry_values.append(AllowedCollisionEntry(enabled=[False]*len(matrix.entry_names)))
+                cup_index = matrix.entry_names.index("pai_cup")
+                for link in ("f1_1", "f2_1"):
+                    finger_index = matrix.entry_names.index(link)
+                    matrix.entry_values[cup_index].enabled[finger_index] = True
+                    matrix.entry_values[finger_index].enabled[cup_index] = True
+                request.scene.allowed_collision_matrix = matrix
                 item = AttachedCollisionObject()
                 item.link_name = model["tcp_frame"]
                 item.object.id, item.object.operation = "pai_cup", CollisionObject.REMOVE
@@ -181,6 +212,10 @@ def main():
                 point = JointTrajectoryPoint(positions=[position])
                 point.time_from_start.sec = 2
                 goal.trajectory.points = [point]
+                if step["name"] == "close":
+                    # 接触時の約0.1 mmの未到達で正常把持を打ち切らない。
+                    # 0.2→1.5 mmの指令に対し、停止したままなら1.3 mm差で依然拒否する。
+                    goal.goal_tolerance = [JointTolerance(name=joint, position=0.0003)]
                 action(FollowJointTrajectory, f"/{side}_finger_controller/follow_joint_trajectory",
                        goal, lambda result: result.error_code == 0)
             if step["name"] == "close":
@@ -194,8 +229,19 @@ def main():
         run_steps(steps, execute, lambda: stop[0])
         print("sequence complete; task success requires human judgement", flush=True)
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            if original_contact_matrix[0] is not None:
+                request = ApplyPlanningScene.Request()
+                request.scene.is_diff = True
+                request.scene.robot_state.is_diff = True
+                request.scene.allowed_collision_matrix = original_contact_matrix[0]
+                client = node.create_client(ApplyPlanningScene, "/apply_planning_scene")
+                if not client.wait_for_service(timeout_sec=5) or not wait(client.call_async(request), 5).success:
+                    raise RuntimeError("could not restore planning collision matrix; reset before next trial")
+                node.destroy_client(client)
+        finally:
+            node.destroy_node()
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
