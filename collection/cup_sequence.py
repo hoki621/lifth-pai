@@ -14,13 +14,13 @@ def validate_steps(steps):
     if not steps:
         raise ValueError("empty sequence")
     for step in steps:
-        if set(step) not in ({"name", "pose"}, {"name", "gripper"}):
-            raise ValueError("each step needs a name and exactly one pose/gripper target")
-        values = step.get("pose", step.get("gripper"))
-        expected = 7 if "pose" in step else 2
+        if set(step) not in ({"name", "pose"}, {"name", "cartesian"}, {"name", "gripper"}):
+            raise ValueError("each step needs a name and exactly one pose/cartesian/gripper target")
+        values = step.get("pose", step.get("cartesian", step.get("gripper")))
+        expected = 2 if "gripper" in step else 7
         if len(values) != expected or not all(math.isfinite(v) for v in values):
             raise ValueError(f"invalid target: {step['name']}")
-        if "pose" in step and abs(sum(v*v for v in values[3:]) - 1) > 1e-6:
+        if "gripper" not in step and abs(sum(v*v for v in values[3:]) - 1) > 1e-6:
             raise ValueError("pose quaternion must be normalized")
 
 
@@ -41,13 +41,14 @@ def main():
     from lifth_bringup.gripper import require_live_model, targets
     from lifth_bringup.model import joint_properties, load_model, robot_description
     from lifth_custom_msgs.action import MoveToPose
+    from moveit_msgs.action import ExecuteTrajectory
     from moveit_msgs.msg import (
         AllowedCollisionEntry,
         AttachedCollisionObject,
         CollisionObject,
         PlanningSceneComponents,
     )
-    from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
+    from moveit_msgs.srv import ApplyPlanningScene, GetCartesianPath, GetPlanningScene
     from rclpy.action import ActionClient
     from rclpy.node import Node
     from rclpy.signals import SignalHandlerOptions
@@ -193,17 +194,61 @@ def main():
         finally:
             node.destroy_client(client)
 
+    def restore_contacts():
+        if original_contact_matrix[0] is None:
+            return
+        request = ApplyPlanningScene.Request()
+        request.scene.is_diff = True
+        request.scene.robot_state.is_diff = True
+        request.scene.allowed_collision_matrix = original_contact_matrix[0]
+        original_contact_matrix[0] = None
+        client = node.create_client(ApplyPlanningScene, "/apply_planning_scene")
+        try:
+            if not client.wait_for_service(timeout_sec=5) or not wait(client.call_async(request), 5).success:
+                raise RuntimeError("could not restore planning collision matrix; reset before next trial")
+        finally:
+            node.destroy_client(client)
+
     def execute(step):
         print(f"phase={step['name']}", flush=True)
-        if "pose" in step:
+        if "pose" in step or "cartesian" in step:
             goal = MoveToPose.Goal()
             goal.target.header.frame_id = model["base_frame"]
-            xyz, quat = list(map(float, step["pose"][:3])), list(map(float, step["pose"][3:]))
+            values = step.get("pose", step.get("cartesian"))
+            xyz, quat = list(map(float, values[:3])), list(map(float, values[3:]))
             goal.target.pose.position.x, goal.target.pose.position.y, goal.target.pose.position.z = xyz
             q = goal.target.pose.orientation
             q.x, q.y, q.z, q.w = quat
-            goal.mode = MoveToPose.Goal.POSE
-            action(MoveToPose, "/lifth/move_to_pose", goal, lambda result: result.success)
+            if "cartesian" in step:
+                client = node.create_client(GetCartesianPath, "/compute_cartesian_path")
+                try:
+                    if not client.wait_for_service(timeout_sec=5):
+                        raise RuntimeError("existing Cartesian path service unavailable")
+                    request = GetCartesianPath.Request()
+                    request.header.frame_id = model["base_frame"]
+                    request.start_state.is_diff = True
+                    request.group_name = model["moveit"]["group"]
+                    request.link_name = model["tcp_frame"]
+                    request.waypoints = [goal.target.pose]
+                    request.max_step = 0.002
+                    request.revolute_jump_threshold = 0.1
+                    request.avoid_collisions = True
+                    request.max_velocity_scaling_factor = 0.5
+                    request.max_acceleration_scaling_factor = 0.5
+                    result = wait(client.call_async(request), 10)
+                    if result.error_code.val != 1 or not 1.0 - 1e-9 <= result.fraction <= 1.0:
+                        raise RuntimeError(f"Cartesian path incomplete: fraction={result.fraction}, error={result.error_code.val}")
+                    print(f"cartesian fraction={result.fraction} points={len(result.solution.joint_trajectory.points)}", flush=True)
+                    execution = ExecuteTrajectory.Goal()
+                    execution.trajectory = result.solution
+                finally:
+                    node.destroy_client(client)
+                action(ExecuteTrajectory, "/execute_trajectory", execution, lambda result: result.error_code.val == 1)
+            else:
+                goal.mode = MoveToPose.Goal.POSE
+                action(MoveToPose, "/lifth/move_to_pose", goal, lambda result: result.success)
+            if step["name"] == "retreat":
+                restore_contacts()
         else:
             requested = targets(model, properties, *step["gripper"])
             for side, (joint, position) in requested.items():
@@ -230,15 +275,7 @@ def main():
         print("sequence complete; task success requires human judgement", flush=True)
     finally:
         try:
-            if original_contact_matrix[0] is not None:
-                request = ApplyPlanningScene.Request()
-                request.scene.is_diff = True
-                request.scene.robot_state.is_diff = True
-                request.scene.allowed_collision_matrix = original_contact_matrix[0]
-                client = node.create_client(ApplyPlanningScene, "/apply_planning_scene")
-                if not client.wait_for_service(timeout_sec=5) or not wait(client.call_async(request), 5).success:
-                    raise RuntimeError("could not restore planning collision matrix; reset before next trial")
-                node.destroy_client(client)
+            restore_contacts()
         finally:
             node.destroy_node()
             rclpy.shutdown()
