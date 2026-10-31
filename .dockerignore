@@ -1,0 +1,10 @@
+**
+!external/
+external/**
+!external/lifth_arm_gen2/
+external/lifth_arm_gen2/**
+!external/lifth_arm_gen2/src/
+external/lifth_arm_gen2/src/**
+!external/lifth_arm_gen2/src/*/
+external/lifth_arm_gen2/src/*/**
+!external/lifth_arm_gen2/src/*/package.xml
