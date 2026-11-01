@@ -10,7 +10,7 @@
   "image_shape_hwc": [360, 640, 3],
   "state_key": "observation.state",
   "action_key": "action",
-  "task": "Pick up the cup and place it on the target support.",
+  "task": "Pick up the cup and place it on the green square.",
   "timing": {
     "validated": false,
     "fps": 15,

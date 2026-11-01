@@ -25,7 +25,7 @@ def main():
             raise RuntimeError("existing recorder start service unavailable")
         control(True)
         try:
-            request = StartEpisode.Request(task="I1 cup transfer on fixed pedestals")
+            request = StartEpisode.Request(task="I1 cup transfer to the green square")
             future = client.call_async(request)
             rclpy.spin_until_future_complete(node, future, timeout_sec=4)
             if not future.done():
