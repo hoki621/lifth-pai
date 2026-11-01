@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 sys.path.insert(0, 'collection')
-from prepare_robot_model import BASE_SHA, PACKAGE, SHA256, check_model, prepare
+from prepare_robot_model import BASE_SHA, PACKAGE, SHA256, check_model, configure_overview_camera, prepare
 
 spec = yaml.safe_load(Path('dependencies.repos').read_text())['repositories']['lifth_arm_gen2']
 if spec['version'] != BASE_SHA:
@@ -34,6 +34,7 @@ if marker.exists():
     recorded = json.loads(marker.read_text())
     if recorded['base_sha'] != BASE_SHA or recorded['source_zip_sha256'] != SHA256:
         raise SystemExit('existing model settings have a different source; inspect before replacing')
+    configure_overview_camera(base)
 else:
     prepare(base, provided)
 PY
