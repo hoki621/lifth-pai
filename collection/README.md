@@ -22,3 +22,7 @@ RGBと光学TFは同じD405モデルから生成し、提供ZIPと固定基盤�
 `prepare_cup_world.py` は連続した平面と緑の16 cm四方の置き先を生成します。
 `baseline` / `near` / `yaw_plus` はそれぞれ画面中央・右側・上側の3候補です。
 旧100件は視認性不足のためVLA学習用として採用しません。
+
+収集raw・変換dataset・確認動画は `outputs/datasets/<run>/` に保存します。
+現在の成功3件は `outputs/datasets/cup-pilot-20261101/`、入口は `outputs/datasets/current/`。
+新しい100件の収集先は `outputs/datasets/cup-100-RUN/` とし、runごとに分けます。

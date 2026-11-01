@@ -11,7 +11,8 @@ Issue #5ではカップ位置・yawをランダム化した成功100件をhikari
 train 90件・validation 10件、全106,177 frameの公式reader照合を確認済みです。
 ただし旧動画は開始時のカップ・置き先の視認性を満たさず、VLA学習用として採用しません。
 現在の既定設定は固定俯瞰カメラ・連続した平面・緑の正方形の置き先へ修正しています。
-旧構図データと失敗rawは削除済みで、現在有効な教師デモ3件の入口はhikariの `outputs/issue5/current/` です。
+旧構図データと失敗rawは削除済みで、現在有効な教師デモ3件の入口はhikariの `outputs/datasets/current/` です。
+収集raw・変換dataset・確認動画の保存先は `outputs/datasets/<run>/` に統一します。
 [収集・変換の手順と結果](docs/issue-5-collection.md)を参照してください。
 
 ## 構成
