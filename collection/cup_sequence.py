@@ -136,7 +136,7 @@ def run_teacher():
         finally:
             client.destroy()
 
-    def scene(attached=False, placed=False):
+    def scene(attached=False, placed=False, grasp_contact=False):
         # Gazeboへの拘束は作らない。ここでのattachはMoveItの計画用のみ。
         world = ET.parse(args.world).find("world")
         client = node.create_client(ApplyPlanningScene, "/apply_planning_scene")
@@ -180,8 +180,8 @@ def run_teacher():
                     request.scene.robot_state.attached_collision_objects.append(item)
                 else:
                     request.scene.world.collision_objects.append(obj)
-            if placed:
-                # 解放直後の指とcupの接触は正常。腕・支持台の衝突除外は変えない。
+            if placed or grasp_contact:
+                # 把持の最終接近・解放直後だけ指とcupの接触を許可する。腕・平面は除外しない。
                 getter = node.create_client(GetPlanningScene, "/get_planning_scene")
                 try:
                     if not getter.wait_for_service(timeout_sec=5):
@@ -191,7 +191,8 @@ def run_teacher():
                     matrix = wait(getter.call_async(query), 5).scene.allowed_collision_matrix
                 finally:
                     node.destroy_client(getter)
-                original_contact_matrix[0] = copy.deepcopy(matrix)
+                if original_contact_matrix[0] is None:
+                    original_contact_matrix[0] = copy.deepcopy(matrix)
                 for name in ("pai_cup", "f1_1", "f2_1"):
                     if name not in matrix.entry_names:
                         matrix.entry_names.append(name)
@@ -204,10 +205,11 @@ def run_teacher():
                     matrix.entry_values[cup_index].enabled[finger_index] = True
                     matrix.entry_values[finger_index].enabled[cup_index] = True
                 request.scene.allowed_collision_matrix = matrix
-                item = AttachedCollisionObject()
-                item.link_name = model["tcp_frame"]
-                item.object.id, item.object.operation = "pai_cup", CollisionObject.REMOVE
-                request.scene.robot_state.attached_collision_objects.append(item)
+                if placed:
+                    item = AttachedCollisionObject()
+                    item.link_name = model["tcp_frame"]
+                    item.object.id, item.object.operation = "pai_cup", CollisionObject.REMOVE
+                    request.scene.robot_state.attached_collision_objects.append(item)
             if not wait(client.call_async(request), 5).success:
                 raise RuntimeError("planning scene update rejected")
         finally:
@@ -231,6 +233,8 @@ def run_teacher():
     def execute(step):
         print(f"phase={step['name']}", flush=True)
         if "pose" in step or "cartesian" in step:
+            if step["name"] == "lower":
+                scene(grasp_contact=True)
             goal = MoveToPose.Goal()
             goal.target.header.frame_id = model["base_frame"]
             values = step.get("pose", step.get("cartesian"))
@@ -277,12 +281,14 @@ def run_teacher():
                 point.time_from_start.sec = 2
                 goal.trajectory.points = [point]
                 if step["name"] == "close":
-                    # 接触時の約0.1 mmの未到達で正常把持を打ち切らない。
-                    # 0.2→1.5 mmの指令に対し、停止したままなら1.3 mm差で依然拒否する。
-                    goal.goal_tolerance = [JointTolerance(name=joint, position=0.0003)]
+                    # 接触による未到達を目標の20%（最大8 mm）まで許容する。
+                    # 旧1.5 mm指令は従来の0.3 mm許容差を維持し、開いたままなら拒否する。
+                    tolerance = min(0.008, abs(position) * 0.2)
+                    goal.goal_tolerance = [JointTolerance(name=joint, position=tolerance)]
                 action(FollowJointTrajectory, f"/{side}_finger_controller/follow_joint_trajectory",
                        goal, lambda result: result.error_code == 0)
             if step["name"] == "close":
+                restore_contacts()
                 scene(attached=True)
             elif step["name"] == "release":
                 scene(placed=True)

@@ -26,19 +26,34 @@ class TrialTests(unittest.TestCase):
                 self.assertEqual(scene["cup_pose"][5], scene["place_pose"][5])
                 for actual, expected in zip(body_center(scene["place_pose"]), body_center(baseline["place_pose"])):
                     self.assertAlmostEqual(actual, expected)
-                for step, original in zip(scene["steps"], baseline["steps"]):
+                originals = {step["name"]: step for step in baseline["steps"]}
+                for step in scene["steps"]:
+                    if step["name"] == "preapproach":
+                        self.assertEqual(step["pose"], originals["approach"]["pose"])
+                        continue
+                    original = originals[step["name"]]
                     if "gripper" in step:
                         self.assertEqual(step, original)
                         continue
                     target = step.get("pose", step.get("cartesian"))
                     reference = original.get("pose", original.get("cartesian"))
-                    self.assertEqual(target[2:], reference[2:])  # no guessed TCP yaw rotation
+                    self.assertEqual(target[2], reference[2])
+                    yaw = scene["cup_pose"][5]
+                    qx, qy, qz, qw = target[3:]
+                    self.assertAlmostEqual(qx*qx + qy*qy, 1)
+                    self.assertEqual([qz, qw], [0, 0])
+                    parallel = (qx*qx-qy*qy)*math.cos(yaw) + 2*qx*qy*math.sin(yaw)
+                    self.assertAlmostEqual(abs(parallel), 1)
                     if step["name"] in ("approach", "lower", "grasp_pose", "lift"):
                         for i in (0, 1):
                             self.assertAlmostEqual(target[i] - body_center(scene["cup_pose"])[i],
-                                                   reference[i] - body_center(baseline["cup_pose"])[i])
+                                                   -.070 * (math.cos(yaw) if i == 0 else math.sin(yaw)))
+                    elif step["name"] in ("transfer", "place", "retreat"):
+                        for i in (0, 1):
+                            self.assertAlmostEqual(target[i] - body_center(scene["place_pose"])[i],
+                                                   -.070 * (math.cos(yaw) if i == 0 else math.sin(yaw)))
                     else:
-                        self.assertEqual(step, original)
+                        self.assertEqual(target[:3], reference[:3])
                 if scene["placement_id"] == "baseline":
                     self.assertEqual(scene["steps"], baseline["steps"])
                     self.assertEqual(scene["cup_pose"], baseline["cup_pose"])
@@ -61,11 +76,15 @@ class TrialTests(unittest.TestCase):
             self.assertFalse(trial["accepted"])
             validate_scene_world(config, trial["world"])
             world = ET.parse(trial["world"])
-            supports = world.findall("world/model[@name='pai_floor']/link/collision/pose")
-            for support, pose in zip(supports, (config["cup_pose"], config["place_pose"])):
-                xyz = list(map(float, support.text.split()))
-                for actual, expected in zip(xyz[:2], body_center(pose)):
-                    self.assertAlmostEqual(actual, expected)
+            floor = world.find("world/model[@name='pai_floor']/link")
+            self.assertEqual(len(floor.findall('collision')), 1)
+            self.assertEqual(floor.findtext('collision/geometry/box/size'), '0.96 0.90 0.03')
+            self.assertIsNone(floor.find('collision/geometry/cylinder'))
+            marker = floor.find("visual[@name='target_region']")
+            self.assertEqual(marker.findtext('geometry/box/size'), '0.16 0.16 0.0002')
+            xy = list(map(float, marker.findtext('pose').split()))[:2]
+            for actual, expected in zip(xy, body_center(config['place_pose'])):
+                self.assertAlmostEqual(actual, expected)
             with self.assertRaises(FileExistsError):
                 prepare_trial(scene, root / "trial", base, assets)
             config["cup_pose"][0] += .01
