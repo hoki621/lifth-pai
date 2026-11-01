@@ -14,9 +14,9 @@ def body_center(pose):
 def random_scene(baseline, seed, placement_id, split):
     rng = random.Random(seed)
     scene = copy.deepcopy(baseline)
-    scene['cup_pose'][0] += rng.uniform(-.02, .02)
-    scene['cup_pose'][1] += rng.uniform(-.03, .03)
-    scene['cup_pose'][5] += rng.uniform(-math.pi / 6, math.pi / 6)
+    scene['cup_pose'][0] += rng.uniform(-.02, .10)
+    scene['cup_pose'][1] += rng.uniform(-.28, .02)
+    scene['cup_pose'][5] += rng.uniform(-.15, .15)
     old_center = body_center(baseline['cup_pose'])
     new_center = body_center(scene['cup_pose'])
     destination = body_center(baseline['place_pose'])
@@ -43,6 +43,13 @@ def random_scene(baseline, seed, placement_id, split):
             target[:2] = [after[0] + c*x - s*y, after[1] + s*x + c*y]
         x, y, z, w = target[3:]
         target[3:] = [qw*x - qz*y, qz*x + qw*y, qw*z + qz*w, qw*w - qz*z]
+    # Start from the known forward-facing posture before moving to each cup.
+    approach = next(step for step in scene['steps'] if step['name'] == 'approach')
+    reference = next(step for step in baseline['steps'] if step['name'] == 'approach')
+    preapproach = copy.deepcopy(reference)
+    preapproach['name'] = 'preapproach'
+    approach['cartesian'] = approach.pop('pose')
+    scene['steps'].insert(1, preapproach)
     scene.update(placement_id=placement_id, split=split, seed=seed,
                  candidate=True, physical_validation='pending')
     return scene
