@@ -47,6 +47,7 @@ class TrainingTests(unittest.TestCase):
                            "stats_sha256": digest(self.train / "meta/stats.json")}
         write(self.train / "conversion_provenance.json", self.provenance)
         write(self.train.parent / "conversion_report.json", {"status": "complete", "contract": self.contract,
+              "manifest_sha256": self.provenance["manifest_sha256"],
               "splits": {"train": {"root": str(self.train), "repo_id": "lifth/cup-train"}}})
         self.base, self.tokenizer = self.root / BASE_REVISION, self.root / TOKENIZER_REVISION
         self.base.mkdir()
@@ -108,6 +109,26 @@ class TrainingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "new, distinct"):
             self.prepare()
 
+    def test_training_resource_settings_are_recorded(self):
+        with patch("prepare_training.BASE_WEIGHTS_SHA256", digest(self.base / "model.safetensors")):
+            trainer = prepare_training(self.train, self.base, self.tokenizer, self.preparation,
+                                       self.training_output, batch_size=4, num_workers=8)
+        self.assertEqual(trainer["batch_size"], 4)
+        self.assertEqual(trainer["num_workers"], 8)
+        self.assertTrue(trainer["persistent_workers"])
+
+    def test_coarse_episode_frame_verification_is_preserved(self):
+        write(self.train.parent / "conversion_report.json", {"status": "coarse_verified",
+              "verification_level": "episode_frame_counts_only", "contract": self.contract,
+              "manifest_sha256": self.provenance["manifest_sha256"], "splits": {"train": {
+                  "root": str(self.train), "repo_id": "lifth/cup-train"}}})
+        write(self.train / "conversion_provenance.json", {**self.provenance,
+              "verification_level": "episode_frame_counts_only"})
+        trainer = self.prepare()
+        inputs = json.loads((self.preparation / "training_inputs.json").read_text())
+        self.assertEqual(trainer["dataset"]["eval_split"], 0)
+        self.assertEqual(inputs["dataset_verification_level"], "episode_frame_counts_only")
+
     def test_validation_stats_and_wrong_weights_refused(self):
         with self.assertRaisesRegex(ValueError, "weights differ"):
             prepare_training(self.train, self.base, self.tokenizer, self.preparation, self.training_output)
@@ -137,13 +158,27 @@ class TrainingTests(unittest.TestCase):
             inspect_checkpoint(checkpoint)
 
     def test_validation_must_use_separate_matching_root(self):
-        inputs = {"train_root": str(self.train), "manifest_sha256": "a" * 64}
+        validation = self.train.parent / "validation"
+        write(self.train.parent / "conversion_report.json", {"status": "complete", "contract": self.contract,
+              "manifest_sha256": "a" * 64, "splits": {"train": {"root": str(self.train)},
+              "validation": {"root": str(validation)}}})
+        inputs = {"train_root": str(self.train), "manifest_sha256": "a" * 64,
+                  "conversion_report_sha256": digest(self.train.parent / "conversion_report.json")}
         with self.assertRaisesRegex(ValueError, "separate validation"):
             validation_provenance(self.train, self.contract, inputs)
-        validation = self.train.parent / "validation"
         write(validation / "meta/stats.json", {})
         write(validation / "conversion_provenance.json", {**self.provenance, "split": "validation",
               "stats_sha256": digest(validation / "meta/stats.json")})
+        validation_provenance(validation, self.contract, inputs)
+        write(self.train.parent / "conversion_report.json", {"status": "coarse_verified",
+              "verification_level": "episode_frame_counts_only", "contract": self.contract,
+              "manifest_sha256": "a" * 64, "splits": {"train": {"root": str(self.train)},
+              "validation": {"root": str(validation)}}})
+        write(validation / "conversion_provenance.json", {**self.provenance, "split": "validation",
+              "stats_sha256": digest(validation / "meta/stats.json"),
+              "verification_level": "episode_frame_counts_only"})
+        inputs["conversion_report_sha256"] = digest(self.train.parent / "conversion_report.json")
+        inputs["dataset_verification_level"] = "episode_frame_counts_only"
         validation_provenance(validation, self.contract, inputs)
 
 

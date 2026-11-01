@@ -3,7 +3,7 @@ name = "lifth-pai-learning"
 version = "0.0.0"
 requires-python = "==3.12.16"
 dependencies = [
-  "lerobot[pi,training]",
+  "lerobot[pi,smolvla,training]",
   "torch==2.11.0+cu128",
   "torchvision==0.26.0+cu128",
   "roslibpy==2.0.1",

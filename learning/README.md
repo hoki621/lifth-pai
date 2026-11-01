@@ -34,18 +34,20 @@ python3 learning/convert_raw.py outputs/issue2/acceptance.json outputs/issue2/da
 
 ## 学習設定と完成checkpoint
 
-依存入力は [pyproject.toml](pyproject.toml)、解決記録は [dependency-provenance.json](dependency-provenance.json)。Python 3.12.16、LeRobot `[pi,training]` の固定commit、roslibpy 2.0.1、候補torch2.11.0+cu128 / torchvision0.26.0+cu128と専用indexを指定する。公式uv.lockのSHA256と区別して、プロジェクトの解決済み [uv.lock](uv.lock) を保存した。`pi` extraだけではdataset/trainer依存を含まないため、同じ固定ソースの `training` extraも使う。exact CPython3.12.16はastral/python-build-standaloneの20261026配布物を公開SHA256と照合し、ignored `learning/.python/` に導入した。uv0.9.26で127 packageを解決し、現platformには123 packageを導入した。`uv sync --project learning --frozen --python learning/.python/python/bin/python3.12 --no-python-downloads` で既存exact interpreterとlockを使う。
+依存入力は [pyproject.toml](pyproject.toml)、解決記録は [dependency-provenance.json](dependency-provenance.json)。Python 3.12.16、LeRobot `[pi,smolvla,training]` の固定commit、roslibpy 2.0.1、候補torch2.11.0+cu128 / torchvision0.26.0+cu128と専用indexを指定する。公式uv.lockのSHA256と区別して、プロジェクトの解決済み [uv.lock](uv.lock) を保存した。`pi` / `smolvla` extraで各モデル依存を、`training` extraでdataset/trainer依存を指定する。exact CPython3.12.16はastral/python-build-standaloneの20261026配布物を公開SHA256と照合し、ignored `learning/.python/` に導入した。uv0.9.26で129 packageを解決し、現platformには125 packageを導入した。`uv sync --project learning --frozen --python learning/.python/python/bin/python3.12 --no-python-downloads` で既存exact interpreterとlockを使う。
 
 ```bash
 # ローカルsnapshotのディレクトリ名は固定revisionそのもの。モデル/ tokenizerを取得しない。
 python3 learning/prepare_training.py outputs/issue2/datasets/train /local/snapshots/22c30e5b34f9e7ab738b1b34fc2fc5ecfe2d28f0 /local/snapshots/35e4f46485b4d07967e7e9935bc3786aad50687c outputs/issue2/prepared --training-output outputs/issue2/training --steps 10 --device cuda --dtype bfloat16 --train-expert-only --gradient-checkpointing
+# SmolVLAは固定baseとVLM snapshotを渡し、LeRobotのsmolvla extraを使う。
+python3 learning/prepare_training.py outputs/issue2/datasets/train /local/snapshots/5e8d12a6e2975b0e5e5fce7c8caf47c371d257b6 /local/snapshots/7b375e1b73b11138ff12fe22c8f2822d8fe03467 outputs/issue2/smolvla-prepared --training-output outputs/issue2/smolvla-training --steps 10 --device cuda --dtype bfloat16 --train-expert-only
 # 下記は準備後、別途学習実行を許可されたときだけ。現在は未実行。
 CUDA_VISIBLE_DEVICES=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1 WANDB_MODE=disabled lerobot-train --config_path=outputs/issue2/prepared/train_config.json
 ```
 
 prepareは重みを読み込んでモデルを起動せず、固定baseへのsymlinkを持つ `initialization/`、公式 `train_config.json`、`training_inputs.json` を生成する。bfloat16 / expert-only / gradient-checkpointingは明示オプションで保存する。base重みのSHA256 `0eb11ca9587678c1d2ef8cf32807c29f8ce53a2bfdfc1aa4a4c96f16fca59b0f` は [固定snapshotのHF API LFS metadata](https://huggingface.co/api/models/lerobot/pi05_base/tree/22c30e5b34f9e7ab738b1b34fc2fc5ecfe2d28f0) の `model.safetensors.lfs.oid` から確認。実行時に重みを取得し、このSHA256と一致することも確認した。gated tokenizerはユーザー本人の利用条件承認・対話認証後に固定revisionを取得し、ローカルファイルとhashを記録した。認証情報はログへ出さない。
 
-配布configの32軸・3画像を外部8軸・1画像に置換し、モデル内部padding/resizeは公式pi05を使う。外部は絶対位置、`use_relative_actions=false`, `n_action_steps=1`, `empty_cameras=0`。base processorの統計は除き、公式trainerにtrain専用root統計を渡す。`eval_split=0`、ImageNet統計置換なし、final/途中upload・W&Bとも無効。検証rootは学習設定へ渡さない。
+配布configの32軸・3画像を外部8軸・1画像に置換する。Pi05は外部絶対位置 (`use_relative_actions=false`)、SmolVLAはALOHA向けdelta変換なしで、両方 `n_action_steps=1`, `empty_cameras=0`。SmolVLAは固定revisionのSmolVLMをローカル参照する。base processorの統計は除き、公式trainerにtrain専用root統計を渡す。`eval_split=0`、ImageNet統計置換なし、final/途中upload・W&Bとも無効。検証rootは学習設定へ渡さない。
 
 ```bash
 # 以下も完成checkpointとML環境が揃い、別途実行を許可された後。

@@ -7,6 +7,7 @@
   "lerobot_revision": "7e241bd630a3719a56157a497ce5d08f244784f1",
   "selected_extra": [
     "pi",
+    "smolvla",
     "training"
   ],
   "official_lock_url": "https://raw.githubusercontent.com/huggingface/lerobot/7e241bd630a3719a56157a497ce5d08f244784f1/uv.lock",
@@ -27,10 +28,10 @@
   "runtime_verified": true,
   "remaining_checks": [
     "actual Gazebo completed-policy application/new observation and stop cases owned by Issue3/4",
-    "heldout generalization and full training are deferred"
+    "SmolVLA runtime verified through GPU E2E and full training status is recorded under outputs/issue7/smolvla-epoch1-20261101"
   ],
   "project_lock": "learning/uv.lock",
-  "project_lock_sha256": "35d6dfbf634679472b021fbb5b42c68ae91cb82c52b198b6b4a284dd4d3deb3b",
+  "project_lock_sha256": "deff73bd22226f3df0f95efd325faa70d75610c12dfd125c6f1973786af23397",
   "python_distribution": {
     "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
     "published_digest": "sha256:ce4f6d0a6cfdb3bed6e44c2f9affd85943c76a42e25ad3a259002f31d6fb8a20",
@@ -47,5 +48,13 @@
   "strict_checkpoint_reload_verified": true,
   "validation_forward_verified": true,
   "checkpoint_weights_sha256": "d379388cfbf53d3185ca602004bdbc1ca8a1348de36950a16212f641465340d5",
-  "experiment_summary": "outputs/issue4/e2e-20261101-022215/ML/ml-result.json"
+  "experiment_summary": "outputs/issue4/e2e-20261101-022215/ML/ml-result.json",
+  "smolvla_extra": {
+    "provided_by": "pinned lerobot 0.6.1",
+    "installed_packages": [
+      "num2words==0.5.14",
+      "docopt==0.6.2"
+    ],
+    "reason": "SmolVLM processor requires num2words; resolved through lerobot[smolvla]"
+  }
 }

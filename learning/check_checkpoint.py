@@ -8,7 +8,7 @@ from pathlib import Path
 
 from common import load_contract, offline, upstream, verify_lerobot
 from convert_raw import digest
-from prepare_training import policy_features
+from prepare_training import SMOLVLA_VLM_REVISION, policy_features
 
 
 def verify_training_statistic(key, statistic, actual, expected):
@@ -39,14 +39,35 @@ def inspect_checkpoint(path, contract=None):
     contract = recorded if contract is None else load_contract(contract)
     if contract != recorded:
         raise ValueError("checkpoint training contract/timing differs from requested inference contract")
-    if (config["type"] != "pi05" or config["input_features"] != policy_features(contract)
+    model_type = inputs.get("model_type", config["type"])
+    if model_type not in ("pi05", "smolvla") or config["type"] != model_type:
+        raise ValueError("checkpoint model type differs from the recorded local initialization")
+    if (config["type"] not in ("pi05", "smolvla") or config["input_features"] != policy_features(contract)
             or config["output_features"] != {contract["action_key"]: {"type": "ACTION", "shape": [8]}}
             or config.get("use_relative_actions", False) or config.get("empty_cameras", 0) != 0):
         raise ValueError("checkpoint must have exactly one RGB, external8 absolute state/action")
     root = Path(trainer["dataset"]["root"]).resolve()
+    report_path = root.parent / "conversion_report.json"
+    report = load(report_path)
+    verification_level = report.get("verification_level", "full_frame_readback")
     if (str(root) != inputs["train_root"] or trainer["dataset"]["eval_split"] != 0.0
-            or digest(root / "meta/stats.json") != inputs["train_stats_sha256"]):
+            or digest(root / "meta/stats.json") != inputs["train_stats_sha256"]
+            or digest(report_path) != inputs["conversion_report_sha256"]
+            or report["status"] not in ("complete", "coarse_verified")
+            or report["contract"] != contract
+            or report["manifest_sha256"] != inputs["manifest_sha256"]
+            or Path(report["splits"]["train"]["root"]).resolve() != root
+            or verification_level != inputs.get("dataset_verification_level", verification_level)
+            or (report["status"] == "coarse_verified" and verification_level != "episode_frame_counts_only")):
         raise ValueError("checkpoint training stats/split provenance mismatch")
+    if model_type == "smolvla":
+        vlm = inputs.get("vlm", {})
+        vlm_path = Path(vlm.get("path", "")).resolve()
+        if (vlm.get("revision") != SMOLVLA_VLM_REVISION or str(vlm_path) != inputs["tokenizer"]["path"]
+                or config.get("vlm_model_name") != str(vlm_path)
+                or digest(vlm_path / "model.safetensors") != vlm.get("weights_sha256")
+                or digest(vlm_path / "config.json") != vlm.get("config_sha256")):
+            raise ValueError("SmolVLA checkpoint must reference the recorded local fixed VLM snapshot")
     for filename in ("policy_preprocessor.json", "policy_postprocessor.json"):
         processor = load(path / filename)
         normalization_found = False

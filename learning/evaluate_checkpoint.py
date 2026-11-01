@@ -13,10 +13,21 @@ from convert_raw import digest
 def validation_provenance(root, contract, training_inputs):
     root = Path(root).resolve()
     record = upstream()[0](root / "conversion_provenance.json")
+    report_path = root.parent / "conversion_report.json"
+    report = upstream()[0](report_path)
+    verification_level = report.get("verification_level", "full_frame_readback")
     if (record["split"] != "validation" or load_contract(record["contract"]) != contract
             or record["manifest_sha256"] != training_inputs["manifest_sha256"]
             or root == Path(training_inputs["train_root"]).resolve()
-            or digest(root / "meta/stats.json") != record["stats_sha256"]):
+            or digest(root / "meta/stats.json") != record["stats_sha256"]
+            or report["status"] not in ("complete", "coarse_verified")
+            or report["contract"] != contract
+            or report["manifest_sha256"] != training_inputs["manifest_sha256"]
+            or Path(report["splits"]["validation"]["root"]).resolve() != root
+            or training_inputs.get("conversion_report_sha256", digest(report_path)) != digest(report_path)
+            or training_inputs.get("dataset_verification_level", verification_level) != verification_level
+            or ("verification_level" in record and record["verification_level"] != verification_level)
+            or (report["status"] == "coarse_verified" and verification_level != "episode_frame_counts_only")):
         raise ValueError("separate validation root from the same conversion manifest required")
     return record
 
@@ -65,6 +76,7 @@ def main():
         raise ValueError("empty validation dataset")
     result = {"version": 1, "checkpoint": str(args.checkpoint.resolve()), "validation_root": str(args.validation_root.resolve()),
               "contract": contract, "train_stats_sha256": inputs["train_stats_sha256"],
+              "dataset_verification_level": inputs["dataset_verification_level"],
               "normalization": "saved training processors; validation statistics not used",
               "frames": len(losses), "mean_loss": sum(losses) / len(losses), "seed": 1000,
               "weights_sha256": digest(args.checkpoint / "model.safetensors")}
