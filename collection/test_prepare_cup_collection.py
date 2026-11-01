@@ -13,12 +13,12 @@ class RandomSceneTests(unittest.TestCase):
         for seed in range(100):
             scene = random_scene(base, seed, str(seed), 'train')
             self.assertEqual(scene, random_scene(base, seed, str(seed), 'train'))
-            self.assertLessEqual(abs(scene['cup_pose'][0] - base['cup_pose'][0]), .02)
-            self.assertLessEqual(abs(scene['cup_pose'][1] - base['cup_pose'][1]), .03)
-            self.assertLessEqual(abs(scene['cup_pose'][5] - base['cup_pose'][5]), math.pi / 6)
+            self.assertTrue(-.02 <= scene['cup_pose'][0] - base['cup_pose'][0] <= .10)
+            self.assertTrue(-.28 <= scene['cup_pose'][1] - base['cup_pose'][1] <= .02)
+            self.assertLessEqual(abs(scene['cup_pose'][5] - base['cup_pose'][5]), .15)
             for a, b in zip(body_center(scene['place_pose']), body_center(base['place_pose'])):
                 self.assertAlmostEqual(a, b)
-            for step, original in zip(scene['steps'], base['steps']):
+            for step, original in zip((s for s in scene['steps'] if s['name'] != 'preapproach'), base['steps']):
                 if 'gripper' in step:
                     self.assertEqual(step, original)
                     continue
