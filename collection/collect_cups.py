@@ -96,7 +96,7 @@ def worker(root, index, target):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('output', type=Path)
+    parser.add_argument('output', type=Path, help='run directory, e.g. outputs/datasets/cup-100-RUN')
     parser.add_argument('--per-worker', type=int, default=50)
     args = parser.parse_args()
     root = args.output.resolve()

@@ -1,12 +1,20 @@
 # Issue #5: ランダム配置100成功エピソード
 
+## 保存先
+
+収集raw・変換dataset・確認動画は `outputs/datasets/<run>/` に保存する。
+現在の俯瞰成功3件の実データと動画は `outputs/datasets/cup-pilot-20261101/` に移動済み。
+`outputs/datasets/current/` から参照できる。移動前後の全raw・動画hashは一致する。
+新しい100件は `outputs/datasets/cup-100-RUN/` に保存する。
+過去の試行ログ・設定・結果は `outputs/issue5/` に維持し、既存raw・動画への旧パスも相対リンクで参照可能とする。
+
 ## 視認性の訂正（2026-11-01）
 
 旧100件の形式・物理条件の検査と、VLAに必要な視認性の検査を混同していた。
 旧動画は開始時にカップが映らず、置き先も見切れるため、VLA学習用として採用しない。
 以下の100件の記録は履歴として保持し、新しい構図の収集結果とは区別する。
 ユーザー指定により、旧構図のraw168件・派生dataset・動画と修正中の失敗raw13件は削除済み。
-ログ・設定・結果と俯瞰の成功3件は保持し、`outputs/issue5/current/` に成功3件への入口を置く。
+ログ・設定・結果と俯瞰の成功3件は保持し、`outputs/datasets/current/` に成功3件への入口を置く。
 削除内容は `outputs/issue5/cleanup-result.json` に記録し、成功raw全ファイルの削除前後hash一致を確認した。
 
 既定設定そのものを次の条件へ変更した。別モードは追加しない。
@@ -112,9 +120,9 @@ train 90件、validation 10件とし、heldoutは別途配置だけ予約する�
 `external/lifth_arm_gen2/install` を使う。PAI rootから:
 
 ```bash
-python3 collection/collect_cups.py outputs/issue5/RUN --per-worker 3
+python3 collection/collect_cups.py outputs/datasets/cup-100-RUN --per-worker 3
 # 少量確認後、同じrootで再開
-python3 collection/collect_cups.py outputs/issue5/RUN --per-worker 50
+python3 collection/collect_cups.py outputs/datasets/cup-100-RUN --per-worker 50
 ```
 
 収集先はhikari。ユーザーの継続実行指示により、このマシンで収集から変換まで行う。
@@ -136,7 +144,7 @@ raw complete・upstream validator合格も必須。
 
 ## 採用manifestとLeRobot出力
 
-画像確認は `learning/.venv/bin/python collection/preview_cup_trials.py outputs/issue5/RUN`
+画像確認は `learning/.venv/bin/python collection/preview_cup_trials.py outputs/datasets/cup-100-RUN`
 で作るstart/held/final画像と元PNGを使い、確認者・理由・画像hashを
 各trialの `trial-01/visual-review.json` へ記録する。画像を確認した試行だけ
 `trial.json` の `task_success=true, accepted=true, exclusion_reason=""` にする。
@@ -146,11 +154,11 @@ episodeと配置の重複、heldoutとの混入を検査し、未達ならmanife
 converterがscene/world/rawの整合・既存validator・時刻対応を再検査する。
 
 ```bash
-python3 collection/finalize_cup_selection.py outputs/issue5/RUN
+python3 collection/finalize_cup_selection.py outputs/datasets/cup-100-RUN
 learning/.venv/bin/python learning/convert_raw.py \
-  outputs/issue5/RUN/final-acceptance.json outputs/issue5/RUN/dataset --check-only
+  outputs/datasets/cup-100-RUN/final-acceptance.json outputs/datasets/cup-100-RUN/dataset --check-only
 learning/.venv/bin/python learning/convert_raw.py \
-  outputs/issue5/RUN/final-acceptance.json outputs/issue5/RUN/dataset
+  outputs/datasets/cup-100-RUN/final-acceptance.json outputs/datasets/cup-100-RUN/dataset
 ```
 
 最終出力は `dataset/train/` と `dataset/validation/`。
@@ -161,7 +169,7 @@ learning/.venv/bin/python learning/convert_raw.py \
 物理失敗・raw不正・画像hash不一致は受け付けない。画像を見る作業自体は自動化しない。
 
 ```bash
-python3 collection/record_cup_review.py outputs/issue5/RUN/worker-N/placement-NNNN/trial.json \
+python3 collection/record_cup_review.py outputs/datasets/cup-100-RUN/worker-N/placement-NNNN/trial.json \
   --observer NAME --reason '実際に画像で確認した内容'
 ```
 
