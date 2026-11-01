@@ -7,6 +7,13 @@ LIFTH を使う PAI 課題のリポジトリ。Issue #1の素材準備・教師�
 固定設定はtg1で9/10、hikariの通常launchで8/10成功。hikariのrawは10/10 complete・既存validator合格です。
 [検証結果](docs/issue-1-validation.md)と[原因切分け](docs/issue-1-status.md)を記録しています。
 
+Issue #5ではカップ位置・yawをランダム化した成功100件をhikariで収集し、LeRobot v3へ変換しました。
+train 90件・validation 10件、全106,177 frameの公式reader照合を確認済みです。
+ただし旧動画は開始時のカップ・置き先の視認性を満たさず、VLA学習用として採用しません。
+現在の既定設定は固定俯瞰カメラ・連続した平面・緑の正方形の置き先へ修正しています。
+旧構図データと失敗rawは削除済みで、現在有効な教師デモ3件の入口はhikariの `outputs/issue5/current/` です。
+[収集・変換の手順と結果](docs/issue-5-collection.md)を参照してください。
+
 ## 構成
 
 | 場所 | 用途 |

@@ -74,23 +74,31 @@ def prepare(base_world, assets, config):
         element(ode, "mu", friction)
         element(ode, "mu2", friction)
     world.append(cup)
-    # 低い胴体を横から挟めるよう、手首の下を塞がない細い支持台を置く。
+    # 作業面は連続した平面。置き先は衝突形状を増やさず、緑色の正方形で表示する。
     floor = ET.SubElement(world, "model", name="pai_floor")
     element(floor, "static", "true")
     floor_link = ET.SubElement(floor, "link", name="floor")
-    supports = [pose]
-    if "place_pose" in config and config["place_pose"] != pose:
-        supports.append(config["place_pose"])
-    for index, support in enumerate(supports):
-        x = support[0] + 0.0165*math.cos(support[5]) + 0.0018*math.sin(support[5])
-        y = support[1] + 0.0165*math.sin(support[5]) - 0.0018*math.cos(support[5])
-        height = max(0.05, support[2])
-        for kind in ("collision", "visual"):
-            item = ET.SubElement(floor_link, kind, name=f"{kind}_{index}")
-            element(item, "pose", f"{x} {y} {support[2] - height/2} 0 0 0")
-            cylinder = ET.SubElement(ET.SubElement(item, "geometry"), "cylinder")
-            element(cylinder, "radius", 0.028)
-            element(cylinder, "length", height)
+    for kind in ('collision', 'visual'):
+        item = ET.SubElement(floor_link, kind, name=f'{kind}_0')
+        element(item, 'pose', f'0.60 0 {pose[2] - .015} 0 0 0')
+        box = ET.SubElement(ET.SubElement(item, 'geometry'), 'box')
+        element(box, 'size', '0.96 0.90 0.03')
+        if kind == 'visual':
+            material = ET.SubElement(item, 'material')
+            element(material, 'ambient', '.45 .45 .45 1')
+            element(material, 'diffuse', '.45 .45 .45 1')
+    target = config.get('place_pose', pose)
+    if target[2] != pose[2]:
+        raise ValueError('pick and destination must share the same flat surface')
+    x = target[0] + .0165*math.cos(target[5]) + .0018*math.sin(target[5])
+    y = target[1] + .0165*math.sin(target[5]) - .0018*math.cos(target[5])
+    marker = ET.SubElement(floor_link, 'visual', name='target_region')
+    element(marker, 'pose', f'{x} {y} {pose[2] + .0002} 0 0 0')
+    box = ET.SubElement(ET.SubElement(marker, 'geometry'), 'box')
+    element(box, 'size', '0.16 0.16 0.0002')
+    material = ET.SubElement(marker, 'material')
+    element(material, 'ambient', '0.05 0.85 0.1 1')
+    element(material, 'diffuse', '0.05 0.85 0.1 1')
     return ET.ElementTree(root)
 
 

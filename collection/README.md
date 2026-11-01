@@ -13,3 +13,12 @@ Issue #1の素材検査・確認world生成は[手順と原因切分け](../docs
 raw の読込みは manifest の仕様・正常完了・画像・時刻・joint 順序と単位を確認してから行います。
 
 hikariでのclone後のDocker準備と収録は[移行手順](../docs/hikari-collection.md)を参照してください。
+
+ランダム配置で成功100件を収集しLeRobot v3へ渡す手順・実行結果は[Issue #5の記録](../docs/issue-5-collection.md)を参照してください。
+
+現在の既定カメラは、PAI生成モデルの `base_link` に固定した俯瞰配置です。
+`setup.sh` は既存の生成済みモデルにもこの配置を適用します（変更後は既存手順でbuild）。
+RGBと光学TFは同じD405モデルから生成し、提供ZIPと固定基盤の追跡ファイルは変更しません。
+`prepare_cup_world.py` は連続した平面と緑の16 cm四方の置き先を生成します。
+`baseline` / `near` / `yaw_plus` はそれぞれ画面中央・右側・上側の3候補です。
+旧100件は視認性不足のためVLA学習用として採用しません。

@@ -18,6 +18,35 @@ XACRO = "http://www.ros.org/wiki/xacro"
 ET.register_namespace("xacro", XACRO)
 
 
+def configure_overview_camera(base):
+    """PAI生成モデルのカメラだけをbase固定の俯瞰配置へ変更する。提供ZIPは変更しない。"""
+    package = base / 'src' / PACKAGE
+    marker = package / 'pai-model-source.json'
+    manifest = json.loads(marker.read_text())
+    if manifest['base_sha'] != BASE_SHA or manifest['source_zip_sha256'] != SHA256:
+        raise ValueError('unexpected generated model source')
+    path = package / 'urdf/LIFTH_arm_v2_1_1.xacro'
+    tree = ET.parse(path)
+    joint = tree.getroot().find("joint[@name='ee_camera_link']")
+    if joint is None or joint.find('parent').get('link') not in ('EE_1', 'base_link'):
+        raise ValueError('unexpected camera mounting joint')
+    # 既存D405 macroのセンサーoffset/pitchを合成すると、光学中心は(0.52,0,0.75)、視線は真下。
+    joint.find('parent').set('link', 'base_link')
+    joint.find('origin').set('xyz', '0.52 0.001 0.7722')
+    joint.find('origin').set('rpy', f'0 {5 * math.pi / 6} 0')
+    tree.write(path, encoding='utf-8', xml_declaration=True)
+    srdf = base / 'src/lifth_moveit_config/config/v2_1_1/arm.srdf'
+    semantic = ET.parse(srdf)
+    for item in list(semantic.getroot().findall('disable_collisions')):
+        if {item.get('link1'), item.get('link2')} == {'EE_1', 'camera_link_1'}:
+            semantic.getroot().remove(item)
+    manifest['camera'] = {'mount': 'base_link', 'sensor_position_m': [0.52, 0, 0.75],
+                          'view': 'fixed overhead; existing D405 RGB/calibration/frame contract'}
+    semantic.write(srdf, encoding='utf-8', xml_declaration=True)
+    marker.write_text(json.dumps(manifest, indent=2) + '\n')
+    return manifest
+
+
 def tip_point(package, visual):
     """基盤と同じ最大+Z面の面積重心。実機の接触点ではない。"""
     origin = visual.find("origin")
@@ -113,7 +142,7 @@ def prepare(base, provided):
                 "finger_open_positions_m": [0.0002, -0.0002],
                 "camera": "existing D405 macro; provisional optical origin, not calibrated"}
     (destination / "pai-model-source.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    return manifest
+    return configure_overview_camera(base)
 
 
 if __name__ == "__main__":

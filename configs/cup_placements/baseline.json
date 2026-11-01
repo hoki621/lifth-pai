@@ -1,21 +1,21 @@
 {
   "cup_pose": [
-    0.6,
+    0.5035000000000001,
+    -0.0382,
+    0.1,
     0,
-    0.2,
     0,
-    0,
-    3.141592653589793
+    0.0
   ],
   "mass_kg": 0.3,
   "friction": 0.8,
   "place_pose": [
-    0.6,
-    0.12,
-    0.2,
+    0.4835,
+    0.1618,
+    0.1,
     0,
     0,
-    3.141592653589793
+    0.0
   ],
   "steps": [
     {
@@ -28,80 +28,68 @@
     {
       "name": "approach",
       "pose": [
-        0.37,
-        0.0018,
-        0.4,
+        0.45,
+        -0.04,
+        0.45,
+        -0.0,
+        1.0,
         0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
+        0.0
       ]
     },
     {
       "name": "lower",
       "cartesian": [
-        0.37,
-        0.0018,
-        0.218,
+        0.45,
+        -0.04,
+        0.3385,
+        -0.0,
+        1.0,
         0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
-      ]
-    },
-    {
-      "name": "grasp_pose",
-      "cartesian": [
-        0.41,
-        0.0018,
-        0.218,
-        0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
+        0.0
       ]
     },
     {
       "name": "close",
       "gripper": [
-        0.0015,
-        -0.0015
+        0.04,
+        -0.04
       ]
     },
     {
       "name": "lift",
       "cartesian": [
-        0.41,
-        0.0018,
-        0.4,
+        0.45,
+        -0.04,
+        0.45,
+        -0.0,
+        1.0,
         0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
+        0.0
       ]
     },
     {
       "name": "transfer",
       "cartesian": [
-        0.41,
-        0.1218,
-        0.4,
+        0.43,
+        0.16,
+        0.45,
+        -0.0,
+        1.0,
         0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
+        0.0
       ]
     },
     {
       "name": "place",
       "cartesian": [
-        0.41,
-        0.1218,
-        0.218,
+        0.43,
+        0.16,
+        0.3385,
+        -0.0,
+        1.0,
         0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
+        0.0
       ]
     },
     {
@@ -114,25 +102,25 @@
     {
       "name": "retreat",
       "cartesian": [
-        0.37,
-        0.1218,
-        0.218,
+        0.43,
+        0.16,
+        0.45,
+        -0.0,
+        1.0,
         0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
+        0.0
       ]
     },
     {
       "name": "clear",
-      "cartesian": [
-        0.37,
-        0.1218,
-        0.4,
+      "pose": [
+        0.3,
+        -0.2,
+        0.45,
+        -0.0,
+        1.0,
         0.0,
-        0.7071067811865476,
-        0.0,
-        0.7071067811865476
+        0.0
       ]
     }
   ],
@@ -140,5 +128,6 @@
   "split": "train",
   "candidate": true,
   "physical_validation": "pending",
-  "teacher_basis": "Fixed TCP quaternion preserves cup yaw during transfer. Pick and placed origins compensate rotated mesh body offset; destination body/support center stays fixed. Reachability, handle clearance and contact require Gazebo validation."
+  "view_position": "center",
+  "teacher_basis": "Top-down pinch on handle, no physics attachment; flat table, fixed overhead RGB and green target."
 }
