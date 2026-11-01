@@ -110,6 +110,7 @@ class SafetyCore:
         self.heartbeat_wall = self.steady()
         self.last_target = None
         self.last_target_clock = None
+        self.skew_wall = None
 
     def clock_update(self, now):
         with self.lock:
@@ -143,9 +144,10 @@ class SafetyCore:
             self.heartbeat_wall = self.steady()
             self.started_wall = self.steady()
             self.future_wall = None
+            self.skew_wall = None
 
     def sources_ready(self, state_stamp, image_stamp):
-        """Wait for DDS /clock delivery to catch up, without using future observations."""
+        """Wait within the observation budget for causal, aligned DDS samples."""
         with self.lock:
             if self.clock is None:
                 return False
@@ -156,6 +158,13 @@ class SafetyCore:
                     self.stop('source stamps did not become causal')
                 return False
             self.future_wall = None
+            if abs(state_stamp-image_stamp) > self.timing['max_observation_skew_ns']:
+                if self.skew_wall is None:
+                    self.skew_wall = self.steady()
+                if self.steady()-self.skew_wall > self.timing['max_observation_age_ns']:
+                    self.stop('observation skew did not recover')
+                return False
+            self.skew_wall = None
             return True
 
     def check_observation_delivery(self, state_wall=None, image_wall=None):

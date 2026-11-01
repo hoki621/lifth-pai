@@ -1,0 +1,56 @@
+--- a/collection/policy_adapter.py
++++ b/collection/policy_adapter.py
+@@ -223,17 +223,22 @@
+                     raise ValueError('action source stamps differ')
+                 if self.steady()-self.observation_wall > self.timing['max_command_age_ns']:
+                     raise ValueError('delayed inference action')
+-                values = positions(command['action'], self.properties)
++                chunk = command['action']
++                if not isinstance(chunk, list) or len(chunk) != 10:
++                    raise ValueError('expected exactly ten trajectory points')
++                values = [positions(point, self.properties) for point in chunk]
+                 duration = self.timing['trajectory_duration_ns']
+-                for index, name in enumerate(JOINTS):
+-                    velocity = self.properties[name]['velocity']
+-                    if abs(values[index]-obs['state'][index]) > velocity*duration/1e9:
+-                        raise ValueError(f'URDF velocity exceeded from state: {name}')
+-                    if self.last_target is not None:
+-                        dt = min(duration, self.clock-self.last_target_clock)
+-                        if dt <= 0 or abs(values[index]-self.last_target[index]) > velocity*dt/1e9:
+-                            raise ValueError(f'URDF velocity exceeded from previous target: {name}')
+-                self.last_target, self.last_target_clock = values, self.clock
++                previous = obs['state']
++                for point in values:
++                    for index, name in enumerate(JOINTS):
++                        if abs(point[index]-previous[index]) > self.properties[name]['velocity']*duration/1e9:
++                            raise ValueError(f'URDF velocity exceeded between trajectory points: {name}')
++                    previous = point
++                if self.last_target is not None:
++                    dt = min(duration, self.clock-self.last_target_clock)
++                    if dt <= 0 or any(abs(values[0][i]-self.last_target[i]) > self.properties[n]['velocity']*dt/1e9 for i,n in enumerate(JOINTS)):
++                        raise ValueError('URDF velocity exceeded from previous target')
++                self.last_target, self.last_target_clock = values[-1], self.clock
+                 self.minimum_stamps = (obs['state_stamp_ns'], obs['image_stamp_ns'])
+                 self.observation = None
+                 self.batch = {'entries': {}, 'values': values, 'next': 0,
+@@ -269,7 +274,7 @@
+         entry = {'handle': None, 'terminal': False, 'cancel_sent': False, 'cancel_done': False}
+         batch['entries'][name] = entry
+         try:
+-            future = self.send(name, [batch['values'][JOINTS.index(j)] for j in GROUPS[name]],
++            future = self.send(name, [[point[JOINTS.index(j)] for j in GROUPS[name]] for point in batch['values']],
+                                self.timing['trajectory_duration_ns'])
+             future.add_done_callback(lambda f: self._accepted(batch, entry, f))
+         except Exception as error:
+@@ -412,7 +417,8 @@
+             def send(name, values, duration):
+                 goal = FollowJointTrajectory.Goal()
+                 goal.trajectory.joint_names = list(GROUPS[name])
+-                point = JointTrajectoryPoint(positions=list(map(float, values)))
+-                point.time_from_start.sec, point.time_from_start.nanosec = divmod(duration, 1_000_000_000)
+-                goal.trajectory.points = [point]
++                for index, values_at_point in enumerate(values):
++                    point = JointTrajectoryPoint(positions=list(map(float, values_at_point)))
++                    point.time_from_start.sec, point.time_from_start.nanosec = divmod(duration*(index+1), 1_000_000_000)
++                    goal.trajectory.points.append(point)
+                 return clients[name].send_goal_async(goal)

@@ -209,6 +209,23 @@ class AdapterTest(unittest.TestCase):
         self.assertFalse(self.core.sources_ready(self.now+1_000_000_000, self.now))
         self.assertTrue(self.core.stopped)
 
+    def test_skewed_samples_wait_for_alignment_with_a_bounded_deadline(self):
+        old = self.now-self.timing['max_observation_skew_ns']-1
+        self.assertFalse(self.core.sources_ready(self.now, old))
+        self.assertFalse(self.core.stopped)
+        self.assertFalse(self.calls)
+        self.advance(10_000_000)
+        self.assertTrue(self.core.sources_ready(self.now, self.now))
+        self.assertFalse(self.core.stopped)
+        self.assertIsNone(self.core.skew_wall)
+        old = self.now-self.timing['max_observation_skew_ns']-1
+        self.assertFalse(self.core.sources_ready(self.now, old))
+        self.advance(self.timing['max_observation_age_ns']+1)
+        self.assertFalse(self.core.sources_ready(self.now, old))
+        self.assertTrue(self.core.stopped)
+        self.assertEqual(self.core.reason, 'observation skew did not recover')
+        self.assertFalse(self.calls)
+
     def test_streaming_future_states_preserve_last_causal_sample(self):
         inputs = CausalInputs()
         inputs.put('state', self.now, {'state_stamp': self.now, 'state_wall': self.now}, self.now)

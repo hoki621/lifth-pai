@@ -1,4 +1,4 @@
-# I1: fixed model/API/schema v2 foundation; tg1 validation: docs/issue-1-validation.md.
+# Fixed model/API/schema v2 foundation.
 repositories:
   lifth_arm_gen2:
     type: git

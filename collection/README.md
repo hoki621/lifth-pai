@@ -1,28 +1,47 @@
-# collection (tg1 / hikari)
+# 教師デモ収集
 
-教師デモと raw 収録への PAI 固有接続を置く場所です。
-Issue #1の素材検査・確認world生成は[手順と原因切分け](../docs/issue-1-status.md)を参照してください。
-教師シーケンスと既存収録の起動接続があります。ROS環境と既存のPyYAMLを使います。
-共通基盤の camera / recorder を利用し、重複実装しません。
-`cup_demo.launch.py` は `reliable_rgb_recorder.py` を介し、固定基盤recorderのRGB購読だけをRELIABLEにします。
-他streamは従来のBEST_EFFORTを維持し、実際のRGB QoSはrawの `provenance.settings.qos.rgb` に記録します。
+[環境準備](../docs/environment.md)に従って基盤、ロボットモデル、カップ素材、Dockerイメージを用意します。`collection/ros.sh` はROS 2と基盤の環境を読み込んでからコマンドを実行します。
 
-環境は Ubuntu 22.04 / ROS 2 Humble / Gazebo Fortress。
-[環境手順](../docs/environment.md)に従い、LeRobot をこの環境へ導入しません。
-固定 recorder はschema v2でstate 8軸とarm6・左右各1軸の実commandを独立保存します。指のcommandをstateやゼロ値で合成しません。
-raw の読込みは manifest の仕様・正常完了・画像・時刻・joint 順序と単位を確認してから行います。
+## 1エピソード
 
-hikariでのclone後のDocker準備と収録は[移行手順](../docs/hikari-collection.md)を参照してください。
+コンテナ内のターミナルでlaunchを起動します。起動だけではアームは動きません。
 
-ランダム配置で成功100件を収集しLeRobot v3へ渡す手順・実行結果は[Issue #5の記録](../docs/issue-5-collection.md)を参照してください。
+```bash
+docker exec -it lifth-pai-collection bash collection/ros.sh \
+  ros2 launch collection/cup_demo.launch.py
+```
 
-現在の既定カメラは、PAI生成モデルの `base_link` に固定した俯瞰配置です。
-`setup.sh` は既存の生成済みモデルにもこの配置を適用します（変更後は既存手順でbuild）。
-RGBと光学TFは同じD405モデルから生成し、提供ZIPと固定基盤の追跡ファイルは変更しません。
-`prepare_cup_world.py` は連続した平面と緑の16 cm四方の置き先を生成します。
-`baseline` / `near` / `yaw_plus` はそれぞれ画面中央・右側・上側の3候補です。
-旧100件は視認性不足のためVLA学習用として採用しません。
+別ターミナルでrecorderを開始し、教師シーケンスを実行して終了します。
 
-収集raw・変換dataset・確認動画は `outputs/datasets/<run>/` に保存します。
-現在の成功3件は `outputs/datasets/cup-pilot-20261101/`、入口は `outputs/datasets/current/`。
-新しい100件の収集先は `outputs/datasets/cup-100-RUN/` とし、runごとに分けます。
+```bash
+docker exec lifth-pai-collection bash collection/ros.sh python3 collection/start_episode.py
+docker exec -it lifth-pai-collection bash collection/ros.sh \
+  python3 collection/cup_sequence.py configs/cup_scene.json
+docker exec lifth-pai-collection bash collection/ros.sh \
+  ros2 service call /lifth/episode/stop std_srvs/srv/Trigger '{}'
+docker exec lifth-pai-collection bash collection/ros.sh \
+  python3 -m lifth_dataset.validate data/raw/episode_ID
+```
+
+`episode_ID` は開始時に表示された保存先に置き換えます。raw検証の合格と物理タスクの成功は別に確認します。次の試行前にはlaunchを終了・再起動して配置を戻します。
+
+## ランダム配置の収集と確認
+
+準備済みの `lifth-pai-collection:humble` と基盤buildを使い、リポジトリ直下から実行します。`collect_cups.py` は2 workerを使用します。
+
+```bash
+python3 collection/collect_cups.py outputs/datasets/cup-run --per-worker 3
+# 必要に応じて同じ出力先から再開
+python3 collection/collect_cups.py outputs/datasets/cup-run --per-worker 50
+learning/.venv/bin/python collection/preview_cup_trials.py outputs/datasets/cup-run
+```
+
+各画像を確認してから、成功と判定したtrialを記録します。確認後、対象数の成功データが揃っていれば採用manifestを生成できます。
+
+```bash
+python3 collection/record_cup_review.py outputs/datasets/cup-run/worker-N/placement-NNNN/trial.json \
+  --observer NAME --reason '画像で確認した内容'
+python3 collection/finalize_cup_selection.py outputs/datasets/cup-run
+```
+
+manifestからの変換は[learning/README.md](../learning/README.md)を参照してください。
